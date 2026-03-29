@@ -1,0 +1,153 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+.container {
+    /*
+    max-width: 600px;
+    */
+    /* 容器宽度由内容决定 */
+    width: fit-content;
+    margin: 0 auto;
+}
+.data-panel {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #f9f9f9;
+}
+.data-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: white;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.data-label {
+    font-weight: bold;
+}
+.data-value {
+    color: #2c3e50;
+}
+.red-value {
+    color: red;
+    font-weight: bold;
+}
+.timestamp {
+    color: #7f8c8d;
+    font-size: 0.9em;
+    text-align: right;
+    margin-top: 10px;
+}
+
+.data-table {
+    /*
+    width: 100%;
+    */
+    table-layout: fixed;/* 精确控制列宽 */
+    /*
+    border: 1px solid #ccc;
+    border-collapse: collapse;
+    */
+    border-spacing: 0 15px;    /* 纵向间距15px，横向无间距 */
+    border-collapse: separate; /* 必须用separate才能保留间距 */
+    /* margin: 10px 0; */
+}
+
+/* 为每行创建圆角 */
+tr {
+    border-radius: 12px;       /* 圆角半径 */
+}
+/* 为第一个单元格设置左侧圆角 */
+tr td:first-child, tr th:first-child {
+    border-top-left-radius: 12px;
+    border-bottom-left-radius: 12px;
+}
+/* 为最后一个单元格设置右侧圆角 */
+tr td:last-child, tr th:last-child {
+    border-top-right-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+/* 无纵向边框 */
+td:not(:last-child), th:not(:last-child) {
+    border-right: none;        /* 移除所有纵向边框 */
+}
+
+/* 阴影效果 */
+tr {
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease; /* 添加动画过渡 */
+}
+/* 悬停效果 */
+tr:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px); /* 悬停上浮效果 */
+}
+
+th, td {
+    /* border: 1px solid #ccc; */
+    /*
+    border: none;
+    border-bottom: 1px solid #ccc;
+    */
+    padding: 10px;
+    text-align: right;
+    background-color: white;
+}
+
+.data-table th {
+    background-color: #f0f0f0;
+}
+
+.left-align-th, .left-align-td {
+    text-align: left;
+    /* border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); */
+}
+
+/* RSSI显示 */
+.rssi-item {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+}
+
+.rssi-bar {
+    height: 15px;
+    flex-basis: 60%;
+    background-color: #f0f0f0; /* #e9ecef */
+    border-radius: 5px;
+    /*
+    overflow: hidden;
+    */
+    /*
+    margin: 10px 0;
+    */
+}
+.rssi-fill {
+    height: 100%; /* 如果没有内容的话就需要设置高度 */
+    background-color: linear-gradient(90deg, #4CAF50, #45a049);
+    border-radius: 5px;
+    /*
+    transition: width 0.3s ease;
+    */
+    /*
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding-right: 10px;
+    */
+    /*
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    */
+    /*
+    box-sizing: border-box;
+    */
+}

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时数据监控</title>
+    <style>
+    </style>
+    <!-- 外部样式表 -->
+    <link rel="stylesheet" href="./public.css">
+</head>
+<body>
+<div class="container">
+    <h1>实时数据监控（AutoTune）</h1>
+    <div class="data-panel">
+<!--        <div id="data-name">-->
+<!--            &lt;!&ndash; 这里显示数据名称 &ndash;&gt;-->
+<!--            <div class="data-item">-->
+<!--                <span class="data-label">标签ID</span>-->
+<!--                <span class="data-label">AutoTune参数</span>-->
+<!--                <span class="data-label">RSSI值</span>-->
+<!--            </div>-->
+<!--        </div>-->
+<!--        <div id="data-container">-->
+<!--            &lt;!&ndash; 数据将在这里动态显示 &ndash;&gt;-->
+<!--        </div>-->
+        <table class="data-table">
+            <colgroup>
+                <col style="width: 120px" id="ID">
+                <col style="width: 240px" id="AutoTune">
+                <col style="width: 240px" id="RSSI">
+                <col style="width: 100px" id="BPI">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th class="left-align-th"><span class="data-label">标签ID</span></th>
+                    <th><span class="data-label">AutoTune参数</span></th>
+                    <th><span class="data-label">RSSI值（dBm）</span></th>
+                    <th><span class="data-label">BPI值（dBm）</span></th>
+                </tr>
+            </thead>
+            <tbody id="data-container">
+                <!-- 表格内容将由JavaScript动态生成 -->
+            </tbody>
+        </table>
+        <div id="timestamp" class="timestamp"></div>
+    </div>
+</div>
+
+<script src="index.js"></script>
+<script>
+</script>
+</body>
+</html>
