@@ -12,6 +12,7 @@ import org.example.util.Point;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -25,8 +26,9 @@ public class BpiReference {
     //    public static int targetAntenna = 1; // 目标天线端口
     public static CountDownLatch readLatch = null;
     public static BpiScanListener bpiScanListener = null;
-    public static double noListenedRssi = -100;
+    public static double noListenedRssi = Double.NEGATIVE_INFINITY; // -200;
     public static String BPI_Tag_EPC = "";
+    public static String Tag_Feature = "";
     public static Path DATA_DIR = Path.of("data\\BPI_Reference");
     static String dateMsg ="";
     static Path now_DATA_DIR = null;
@@ -38,7 +40,30 @@ public class BpiReference {
     }
 
     public static void main(String[] args) {
-        run();
+        ReaderOperations.setNewReader();
+        try {
+            // 连接阅读器
+            ReaderOperations.connectReader();
+
+            // 配置阅读器
+            ReaderOperations.configReader();
+            READER = ReaderOperations.READER;
+
+            // 运行
+            run();
+
+            // 停止阅读器
+            ReaderOperations.stopReader();
+
+            // 与阅读器断开连接
+            ReaderOperations.disconnectReader();
+
+        } catch (OctaneSdkException ex) {
+            System.out.println(ex.getMessage());
+        } catch (Exception ex) {
+            System.out.println(ex.getMessage());
+            ex.printStackTrace(System.out);
+        }
     }
 
     public static void run() {
@@ -47,8 +72,19 @@ public class BpiReference {
             Config config = null;
             config = ConfigFactory.load("config.conf");
             BPI_Tag_EPC = config.getString("bpi_tag_epc");
+            Tag_Feature = config.getString("tag_feature");
 
-            Path now_data_path = now_DATA_DIR.resolve(LocalTime.now().toString() + ".json");
+            Path now_data_path = null;
+            if (Tag_Feature == null) {
+                LocalTime time = LocalTime.now(); // 例如: 14:30:45.123
+                // 1. 转换为 "HH-mm-ss" 格式
+                DateTimeFormatter formatter1 = DateTimeFormatter.ofPattern("HH-mm-ss");
+                String timeStr1 = time.format(formatter1);
+                // 示例: "14-30-45"
+                now_data_path = now_DATA_DIR.resolve(timeStr1 + ".json");
+            } else {
+                now_data_path = DATA_DIR.resolve("tag-features").resolve(Tag_Feature + ".json");
+            }
 
             Point.savePointsToJsonFile(get_BPI_for_each_Ptx(), now_data_path);
 
@@ -71,6 +107,19 @@ public class BpiReference {
 
         // 先停止阅读器
         ReaderOperations.stopReader();
+
+//        // 设置 EPC 过滤
+//        Settings settings = READER.querySettings();
+//        FilterSettings filterSettings = settings.getFilters();
+//        TagFilter filter1 = filterSettings.getTagFilter1();
+//        filter1.setFilterOp(TagFilterOp.Match);
+//        filter1.setMemoryBank(MemoryBank.Epc);
+//        filter1.setBitPointer(32);
+//        filter1.setBitCount(96);
+//        filter1.setTagMask(BPI_Tag_EPC);
+//        filterSettings.setTagFilter1(filter1);
+//        settings.setFilters(filterSettings);
+//        READER.applySettings(settings);
 
         // 创建标签报告监听器
         readLatch = new CountDownLatch(1);
@@ -153,6 +202,7 @@ public class BpiReference {
                 ac.setTxPowerinDbm(nowPtx);
             }
         }
+        settings.setAntennas(antennas);
         READER.applySettings(settings);
 
         // 读取标签

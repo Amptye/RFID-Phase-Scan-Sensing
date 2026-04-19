@@ -1,15 +1,15 @@
 package org.example.reader;
 
-import com.impinj.octane.AntennaConfig;
-import com.impinj.octane.ImpinjReader;
-import com.impinj.octane.OctaneSdkException;
-import com.impinj.octane.Settings;
+import com.impinj.octane.*;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
 import org.example.util.MyStringUtils;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Objects;
@@ -32,7 +32,7 @@ public class ReaderOperations {
     }
 
     public static void configReader()
-            throws OctaneSdkException, URISyntaxException, IOException {
+            throws OctaneSdkException, URISyntaxException, IOException, NoSuchMethodException, IllegalAccessException {
         String settings_path = Objects.requireNonNull(
                 ReaderOperations.class.getClassLoader()
                         .getResource("settings.json")

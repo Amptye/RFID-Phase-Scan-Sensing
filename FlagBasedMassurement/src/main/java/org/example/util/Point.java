@@ -10,12 +10,14 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public record Point(double x, double y) {
     /**
      * 按x坐标排序
-     * @return this.x - other.x
+     * @return this.x - other.x 的正负1或0
      */
     public int compareByX(Point other) {
         return Double.compare(this.x, other.x);
@@ -23,7 +25,7 @@ public record Point(double x, double y) {
 
     /**
      * 按y坐标排序
-     * @return this.y - other.y
+     * @return this.y - other.y 的正负1或0
      */
     public int compareByY(Point other) {
         return Double.compare(this.y, other.y);
@@ -31,7 +33,7 @@ public record Point(double x, double y) {
 
     /**
      * 按模长（到原点的距离）排序
-     * @return this - other
+     * @return this - other 的正负1或0
      */
     public int compareByModulus(Point other) {
         return Double.compare((this.x * this.x + this.y * this.y), (other.x * other.x + other.y * other.y));
@@ -69,6 +71,41 @@ public record Point(double x, double y) {
                 Files.newBufferedReader(filePath),
                 new TypeReference<List<Point>>(){}
         );
+    }
+
+    /**
+     * 读取目录下所有JSON文件到Map
+     * @param directory 目录路径
+     * @return Map<文件名, List<Point>>
+     */
+    public static Map<String, List<Point>> loadPointsMapFromJsonFiles(Path directory) throws IOException {
+        if (!Files.exists(directory) || !Files.isDirectory(directory)) {
+            throw new IllegalArgumentException("目录不存在: " + directory);
+        }
+
+        Map<String, List<Point>> result = new HashMap<>();
+
+        try (var stream = Files.list(directory)) {
+                stream.filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".json"))
+                    .forEach(filePath -> {
+                        try {
+                            // 读取JSON文件
+                            List<Point> points = loadPointsFromJsonFile(filePath);
+
+                            // 获取文件名（不含后缀）
+                            String fileName = MyStringUtils.removeSuffix(filePath.toString(), ".json");
+
+                            // 放入Map
+                            result.put(fileName, points);
+
+                        } catch (Exception e) {
+                            System.err.println("读取文件失败: " + filePath + ", 错误: " + e.getMessage());
+                        }
+                    });
+        }
+
+        return result;
     }
 
     /**

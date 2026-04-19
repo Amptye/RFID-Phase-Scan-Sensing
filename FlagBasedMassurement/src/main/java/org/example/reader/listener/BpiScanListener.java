@@ -33,14 +33,18 @@ public class BpiScanListener implements TagReportListener {
         int times = 0;
         double total_rssi = 0;
         for (Tag t : tags) {
+//            System.out.println(epc);
+//            System.out.println(t.getEpc().toHexString());
             if(epc.equalsIgnoreCase(t.getEpc().toHexString())){
                 ++times;
                 total_rssi += t.getPeakRssiInDbm();
             }
         }
-        rssi = total_rssi/times;
-        if ((!Double.isNaN(rssi)) && (readLatch != null)) {
-            readLatch.countDown();
+        if(times > 0){
+            rssi = total_rssi/times;
+            if ((!Double.isNaN(rssi)) && (readLatch != null)) {
+                readLatch.countDown();
+            }
         }
     }
 }

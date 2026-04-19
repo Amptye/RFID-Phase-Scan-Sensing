@@ -8,6 +8,9 @@ import com.impinj.octane.TagReportListener;
 import java.util.List;
 
 public class TagReportListenerImplementation implements TagReportListener {
+    public TagReportListenerImplementation(){
+        System.out.println("========== TagReportListenerImplementation ==========");
+    }
 
     @Override
     public void onTagReported(ImpinjReader reader, TagReport report) {

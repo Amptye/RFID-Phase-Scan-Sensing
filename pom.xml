@@ -32,12 +32,12 @@
             <dependency>
                 <groupId>com.Impinj</groupId>
                 <artifactId>OctaneSDKJava</artifactId>
-                <version>1.26.0.0</version>
+                <version>4.0.0.0</version>
             </dependency>
             <dependency>
                 <groupId>com.Impinj</groupId>
                 <artifactId>OctaneSDKJava-jar-with-dependencies</artifactId>
-                <version>1.26.0.0</version>
+                <version>4.0.0.0</version>
                 <!-- 真不知道你这个破包要slf4j干嘛？还是1.7.7版本的，还得我手动排除 -->
                 <exclusions>
                     <exclusion>
@@ -64,17 +64,17 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter</artifactId>
                 <version>${spring.version}</version>
-                <!-- 就这两个鬼东西，一直让slf4j报错，浪费我几天时间 -->
-                <exclusions>
-                    <exclusion>
-                        <groupId>ch.qos.logback</groupId>
-                        <artifactId>logback-classic</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.apache.logging.log4j</groupId>
-                        <artifactId>log4j-to-slf4j</artifactId>
-                    </exclusion>
-                </exclusions>
+<!--                &lt;!&ndash; 就这两个鬼东西，一直让slf4j报错，浪费我几天时间 &ndash;&gt;-->
+<!--                <exclusions>-->
+<!--                    <exclusion>-->
+<!--                        <groupId>ch.qos.logback</groupId>-->
+<!--                        <artifactId>logback-classic</artifactId>-->
+<!--                    </exclusion>-->
+<!--                    <exclusion>-->
+<!--                        <groupId>org.apache.logging.log4j</groupId>-->
+<!--                        <artifactId>log4j-to-slf4j</artifactId>-->
+<!--                    </exclusion>-->
+<!--                </exclusions>-->
             </dependency>
 
             <!-- Spring Boot Starter Web -->
@@ -128,12 +128,12 @@
 <!--                <version>2.25.3</version>-->
 <!--            </dependency>-->
 
-            <!-- 统一日志实现，不加这个，slf4j也要报错，真服了 -->
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-log4j2</artifactId>
-                <version>${spring.version}</version>
-            </dependency>
+<!--            &lt;!&ndash; 统一日志实现，不加这个，slf4j也要报错，真服了 &ndash;&gt;-->
+<!--            <dependency>-->
+<!--                <groupId>org.springframework.boot</groupId>-->
+<!--                <artifactId>spring-boot-starter-log4j2</artifactId>-->
+<!--                <version>${spring.version}</version>-->
+<!--            </dependency>-->
         </dependencies>
     </dependencyManagement>
 

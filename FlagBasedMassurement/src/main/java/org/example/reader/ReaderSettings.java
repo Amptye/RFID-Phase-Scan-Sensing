@@ -45,6 +45,7 @@ public class ReaderSettings {
                 ac.setIsMaxTxPower(ac_conf.getBoolean("IsMaxTxPower"));
                 ac.setTxPowerinDbm(ac_conf.getInt("TxPowerinDbm")); //(20); (31.5);
                 ac.setIsMaxRxSensitivity(ac_conf.getBoolean("IsMaxRxSensitivity"));
+//                ac.setRxSensitivityinDbm();
             }
             ReportConfig r = settings.getReport();
             Config report_conf = settings_conf.getConfig("report");

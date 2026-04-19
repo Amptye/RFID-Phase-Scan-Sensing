@@ -4,6 +4,7 @@ import com.impinj.octane.OctaneSdkException;
 import org.example.data.tagdata.MyTagData;
 import org.example.data.tagdata.TagDataCache;
 import org.example.reader.tasks.BpiReference;
+import org.example.reader.tasks.BpiScanSensing;
 import org.example.reader.tasks.PowerScan;
 
 import java.util.Scanner;
@@ -26,7 +27,8 @@ public class ReaderMain {
             ReaderOperations.configReader();
 
             // 先扫频
-            BpiReference.run();
+//            BpiReference.run();
+            BpiScanSensing.run();
 
             // 停止阅读器
             ReaderOperations.stopReader();
