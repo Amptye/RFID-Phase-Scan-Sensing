@@ -25,6 +25,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <slf4j.version>2.0.17</slf4j.version>
         <spring.version>4.0.2</spring.version>
+        <impinj.octane.version>5.2.0.0</impinj.octane.version>
     </properties>
 
     <dependencyManagement>
@@ -32,12 +33,14 @@
             <dependency>
                 <groupId>com.Impinj</groupId>
                 <artifactId>OctaneSDKJava</artifactId>
-                <version>4.0.0.0</version>
+<!--                <version>4.0.0.0</version>-->
+                <version>${impinj.octane.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.Impinj</groupId>
                 <artifactId>OctaneSDKJava-jar-with-dependencies</artifactId>
-                <version>4.0.0.0</version>
+<!--                <version>4.0.0.0</version>-->
+                <version>${impinj.octane.version}</version>
                 <!-- 真不知道你这个破包要slf4j干嘛？还是1.7.7版本的，还得我手动排除 -->
                 <exclusions>
                     <exclusion>
