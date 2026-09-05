@@ -4,43 +4,49 @@ import com.impinj.octane.*;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
+import org.apache.commons.lang3.tuple.Pair;
 import org.example.reader.ReaderOperations;
-import org.example.reader.listener.BpiScanListener;
-import org.example.util.MathUtils;
-import org.example.util.Point;
+import org.example.util.math.MathUtils;
+import org.example.util.math.Point;
+
+import org.example.util.math.plot.Curve;
+import org.example.util.math.plot.LineChart;
+import org.example.util.math.plot.PolynomialCurve;
 
 import java.nio.file.Path;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 public class BpiScanSensing {
     public static ImpinjReader READER = ReaderOperations.READER;
+    public static String Target_EPC = null;
     public static double minPtx = 0.0; // 最小输出功率
     public static double maxPtx = 30.0; // 最大输出功率
-    //    public static int targetAntenna = 1; // 目标天线端口
-    public static CountDownLatch readLatch = null;
-    public static BpiScanListener bpiScanListener = null;
-    public static double noListenedRssi = Double.NEGATIVE_INFINITY; // -200;
-    public static String BPI_Tag_EPC = "";
-    public static String Tag_Feature = "";
+    public static int numPtx = 91;
+    public static double minOverlapRatio = 1;
+    public static double minOverlapWidth = 0;
     public static Map<String, List<Point>> References;
-    public static double Interval_Start = 0;
-    public static double Interval = 0.25;
-    public static Path DATA_DIR = Path.of("data\\BPI_Reference");
-    static String dateMsg ="";
-    static Path now_DATA_DIR = null;
+    public static boolean Record_Scan_Data = false;
+    public static String Tag_Feature = "";
+    public static Path DATA_DIR = Path.of("data");
+    public static Path reference_DATA_DIR = DATA_DIR.resolve("BPI_Reference");
+    public static Path scan_DATA_DIR = DATA_DIR.resolve("BPI_Scan");
+//    static String dateMsg ="";
+//    static Path now_DATA_DIR = null;
+    static Path feature_DATA_DIR = null;
+    public static Path distance_DIR = null;
     //    static ArrayList<String> received_data = new ArrayList<>();
 //    public static TagDataCache dataCache = new TagDataCache();
-    static {
-        dateMsg = LocalDate.now().toString();
-        now_DATA_DIR = DATA_DIR.resolve("data-"+dateMsg);
-    }
+//    static {
+//        dateMsg = LocalDate.now().toString();
+//        now_DATA_DIR = scan_DATA_DIR.resolve("data-"+dateMsg);
+////        feature_DATA_DIR = reference_DATA_DIR.resolve("tag-features");
+//    }
 
     public static void main(String[] args) {
         ReaderOperations.setNewReader();
@@ -70,63 +76,303 @@ public class BpiScanSensing {
     }
 
     public static void run() {
-        System.out.println("=== Impinj读写器扫频获取BPI参考值程序 ===");
+        System.out.println("=== 根据BPI检测环境参数 ===");
+        Path now_data_path = null;
         try {
             Config config = null;
             config = ConfigFactory.load("config.conf");
-            BPI_Tag_EPC = config.getString("bpi_tag_epc");
+//            Target_EPC = config.hasPath("target_epc")
+//                    ? config.getString("target_epc")
+//                    : null;
+            String feature_DIR = config.hasPath("feature_dir")
+                    ? config.getString("feature_dir")
+                    : "tag-features";
+            feature_DATA_DIR = reference_DATA_DIR.resolve(feature_DIR);
 
-            Path now_data_path = null;
+            String distance = config.hasPath("reference_distance")
+                    ? config.getString("reference_distance")
+                    : "unknown_distance";
+            distance_DIR = feature_DATA_DIR.resolve(distance);
 
-//            if (Tag_Feature == null) {
-//                LocalTime time = LocalTime.now(); // 例如: 14:30:45.123
-//                // 1. 转换为 "HH-mm-ss" 格式
-//                DateTimeFormatter formatter1 = DateTimeFormatter.ofPattern("HH-mm-ss");
-//                String timeStr1 = time.format(formatter1);
-//                // 示例: "14-30-45"
-//                now_data_path = now_DATA_DIR.resolve(timeStr1 + ".json");
-//            } else {
-//                now_data_path = DATA_DIR.resolve("tag-features").resolve(Tag_Feature + ".json");
-//            }
+            Record_Scan_Data = config.hasPath("record_scan_data")
+                    && config.getBoolean("record_scan_data");
 
-//            Point.savePointsToJsonFile(get_BPI_for_each_Ptx(), now_data_path);
-
-            References = Point.loadPointsMapFromJsonFiles(DATA_DIR.resolve("tag-features"));
-//            // 先将 References 中折线图中的负无穷点替换为折线图对应位置纵坐标（两边的直接删除）
-//            References.replaceAll((key,value)-> replace_Infinity(value));
-//            for(Map.Entry<String, List<Point>> entry : References.entrySet()){
-//                interpolateMiddleInfinity(entry.getValue());
-//            }
-
-            List<Point> bpi_for_each_ptx = get_BPI_for_each_Ptx();
-            // 不同点的偏差的方差
-            Map<String, Double> variances = get_Map_Variance_of_Error(
-                    bpi_for_each_ptx,
-                    Interval_Start,
-                    Interval);
-            String tag_feature = "do not know!!!";
-            double min_variance = Double.POSITIVE_INFINITY;
-            for(Map.Entry<String, Double> entry : variances.entrySet()){
-                if(entry.getValue() < min_variance){
-                    min_variance = entry.getValue();
-                    tag_feature = entry.getKey();
-                }
+            Tag_Feature = config.hasPath("tag_feature")
+                    ? config.getString("tag_feature")
+                    : null;
+            LocalDateTime time = LocalDateTime.now();
+            DateTimeFormatter formatter1 = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss");
+            String timeStr1 = time.format(formatter1);
+            if (Tag_Feature == null) {
+                now_data_path = scan_DATA_DIR.resolve(feature_DIR).resolve(timeStr1 + ".json");
+            } else {
+                now_data_path = scan_DATA_DIR.resolve(feature_DIR).resolve(Tag_Feature).resolve(timeStr1 + ".json");
             }
 
-            System.out.println("=== 已扫描各频率BPI ===");
-            System.out.println("=== 估计状态为：" + tag_feature + " ===");
         } catch (ConfigException.IO ec){
             System.out.println("无法找到 config.conf 文件");
-        } catch (OctaneSdkException ex) {
+        } catch (Exception ex) {
             System.out.println(ex.getMessage());
+            ex.printStackTrace(System.out);
+        }
+
+//        BpiTest.Target_EPC = Target_EPC;
+        BpiTest.run();
+
+        if(Record_Scan_Data && now_data_path != null){
+            System.out.println("=== 记录BPI扫描值 ===");
+            try {
+                Point.savePointsToJsonFile(BpiTest.bpiList, now_data_path);
+            } catch (Exception ex) {
+                System.out.println(ex.getMessage());
+                ex.printStackTrace(System.out);
+            }
+        }
+
+        System.out.println("=== 根据Ptx-BPI图像形状判断环境参数 ===");
+        try {
+            minPtx = BpiTest.minPtx;
+            maxPtx = BpiTest.maxPtx;
+            numPtx = BpiTest.numPtx;
+
+            References = Point.loadPointsMapFromJsonFiles(distance_DIR);
+            References.replaceAll((key,value)->Curve.remove_Y_NaN(value));
+            List<Point> bpi_for_each_ptx = Curve.remove_Y_NaN(BpiTest.bpiList);
+            minOverlapRatio = 0.95;
+//            minOverlapWidth = minOverlapRatio * (bpi_for_each_ptx.getLast().x() - bpi_for_each_ptx.getFirst().x());
+
+            System.out.println("========================================================");
+            System.out.println("使用原始曲线：");
+            judgeTask(bpi_for_each_ptx);
+
+            System.out.println("========================================================");
+            System.out.println("使用平滑后的曲线，平滑窗口长度为 5：");
+            References.replaceAll((key,value)->Curve.smoothCurve(value,5));
+            bpi_for_each_ptx = Curve.smoothCurve(bpi_for_each_ptx,5);
+            judgeTask(bpi_for_each_ptx);
+
+//            // 不同点的偏差的方差
+//            Map<String, Double> variances = get_Map_Variance_of_Error(
+//                    bpi_for_each_ptx,
+//                    Interval_Start,
+//                    Interval);
+//            String tag_feature = "do not know!!!";
+//            double min_variance = Double.POSITIVE_INFINITY;
+//            for(Map.Entry<String, Double> entry : variances.entrySet()){
+//                if(entry.getValue() < min_variance){
+//                    min_variance = entry.getValue();
+//                    tag_feature = entry.getKey();
+//                }
+//            }
+
+//            System.out.println("=== 估计状态为：" + tag_feature + " ===");
+        } catch (ConfigException.IO ec){
+            System.out.println("无法找到 config.conf 文件");
         } catch (Exception ex) {
             System.out.println(ex.getMessage());
             ex.printStackTrace(System.out);
         }
     }
 
+    public static void judgeTask(List<Point> bpi_for_each_ptx){
+        // 折线图最小均方误差
+        Pair<String, Double> linechart_mse_tag_feature1 = get_LineChart_Min_MSE(bpi_for_each_ptx, 1);
+        Pair<String, Double> linechart_mse_tag_feature2 = get_LineChart_Min_MSE(bpi_for_each_ptx, 2);
+        Pair<String, Double> linechart_mse_tag_feature3 = get_LineChart_Min_MSE(bpi_for_each_ptx, 3);
+        // 折线图最小均方误差（粗搜索 + 精搜索）
+        Pair<String, Double> linechart_coarse_fine_mse_tag_feature1 = get_LineChart_Coarse_Fine_Min_MSE(bpi_for_each_ptx, 1);
+        Pair<String, Double> linechart_coarse_fine_mse_tag_feature2 = get_LineChart_Coarse_Fine_Min_MSE(bpi_for_each_ptx, 2);
+        Pair<String, Double> linechart_coarse_fine_mse_tag_feature3 = get_LineChart_Coarse_Fine_Min_MSE(bpi_for_each_ptx, 3);
+        // 拟合一次多项式的最小均方误差
+        Pair<String, Double> polynomial1_mse_tag_feature1 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 1, 1);
+        Pair<String, Double> polynomial1_mse_tag_feature2 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 1, 2);
+        Pair<String, Double> polynomial1_mse_tag_feature3 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 1, 3);
+        // 拟合二次多项式的最小均方误差
+        Pair<String, Double> polynomial2_mse_tag_feature1 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 2, 1);
+        Pair<String, Double> polynomial2_mse_tag_feature2 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 2, 2);
+        Pair<String, Double> polynomial2_mse_tag_feature3 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 2, 3);
+        // 拟合三次多项式的最小均方误差
+        Pair<String, Double> polynomial3_mse_tag_feature1 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 3, 1);
+        Pair<String, Double> polynomial3_mse_tag_feature2 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 3, 2);
+        Pair<String, Double> polynomial3_mse_tag_feature3 = get_PolynomialCurve_Min_MSE(bpi_for_each_ptx, 3, 3);
+        // 一次多项式的拟合参数的偏差
+        String polynomial1_param_tag_feature = get_1Degree_PolynomialCurve_Min_Parameter_Error(bpi_for_each_ptx);
+        // 二次多项式的拟合参数的偏差
+        String polynomial2_param_tag_feature = get_2Degree_PolynomialCurve_Min_Parameter_Error(bpi_for_each_ptx);
+
+        System.out.println("=== 折线图最小均方误差，每 1 个点采一次样，估计状态为：" + linechart_mse_tag_feature1.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature1.getRight() + " ===");
+        System.out.println("=== 折线图最小均方误差，每 2 个点采一次样，估计状态为：" + linechart_mse_tag_feature2.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature2.getRight() + " ===");
+        System.out.println("=== 折线图最小均方误差，每 3 个点采一次样，估计状态为：" + linechart_mse_tag_feature3.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature3.getRight() + " ===");
+        System.out.println("=== 折线图最小均方误差（粗搜索 + 精搜索），每 1 个点采一次样，估计状态为：" + linechart_coarse_fine_mse_tag_feature1.getLeft() + "，此时重叠率为：" + linechart_coarse_fine_mse_tag_feature1.getRight() + " ===");
+        System.out.println("=== 折线图最小均方误差（粗搜索 + 精搜索），每 2 个点采一次样，估计状态为：" + linechart_coarse_fine_mse_tag_feature2.getLeft() + "，此时重叠率为：" + linechart_coarse_fine_mse_tag_feature2.getRight() + " ===");
+        System.out.println("=== 折线图最小均方误差（粗搜索 + 精搜索），每 3 个点采一次样，估计状态为：" + linechart_coarse_fine_mse_tag_feature3.getLeft() + "，此时重叠率为：" + linechart_coarse_fine_mse_tag_feature3.getRight() + " ===");
+        System.out.println("=== 拟合一次多项式最小均方误差，每 1 个点采一次样，估计状态为：" + polynomial1_mse_tag_feature1.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature1.getRight() + " ===");
+        System.out.println("=== 拟合一次多项式最小均方误差，每 2 个点采一次样，估计状态为：" + polynomial1_mse_tag_feature2.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature2.getRight() + " ===");
+        System.out.println("=== 拟合一次多项式最小均方误差，每 3 个点采一次样，估计状态为：" + polynomial1_mse_tag_feature3.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature3.getRight() + " ===");
+        System.out.println("=== 拟合二次多项式最小均方误差，每 1 个点采一次样，估计状态为：" + polynomial2_mse_tag_feature1.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature1.getRight() + " ===");
+        System.out.println("=== 拟合二次多项式最小均方误差，每 2 个点采一次样，估计状态为：" + polynomial2_mse_tag_feature2.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature2.getRight() + " ===");
+        System.out.println("=== 拟合二次多项式最小均方误差，每 3 个点采一次样，估计状态为：" + polynomial2_mse_tag_feature3.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature3.getRight() + " ===");
+        System.out.println("=== 拟合三次多项式最小均方误差，每 1 个点采一次样，估计状态为：" + polynomial3_mse_tag_feature1.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature1.getRight() + " ===");
+        System.out.println("=== 拟合三次多项式最小均方误差，每 2 个点采一次样，估计状态为：" + polynomial3_mse_tag_feature2.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature2.getRight() + " ===");
+        System.out.println("=== 拟合三次多项式最小均方误差，每 3 个点采一次样，估计状态为：" + polynomial3_mse_tag_feature3.getLeft() + "，此时重叠宽度为：" + linechart_mse_tag_feature3.getRight() + " ===");
+        System.out.println("=== 一次多项式的拟合参数偏差 估计状态为：" + polynomial1_param_tag_feature + " ===");
+        System.out.println("=== 二次多项式的拟合参数偏差 估计状态为：" + polynomial2_param_tag_feature + " ===");
+
+    }
+
     /**
-     * 计算现实BPI序列和给定BPI参考集的偏差方差
+     * 计算现实 BPI 序列和给定 BPI 参考集中每个序列的拟合 一次多项式 的拟合参数的偏差
+     * 顶点式：y=ax+b，只看 a
+     * @param points 现实 BPI 序列
+     * @return 偏差最小的参考序列在 References 中的 key
+     */
+    public static String get_1Degree_PolynomialCurve_Min_Parameter_Error(List<Point> points){
+        String result = "do not know!!!";
+        double min_error = Double.POSITIVE_INFINITY;
+        PolynomialCurve bpi_for_each_ptx = new PolynomialCurve(points, 1);
+//        Map<String, Double> result = new HashMap<>(References.size());
+        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+            PolynomialCurve reference = new PolynomialCurve(entry.getValue(), 1);
+            double now_error = bpi_for_each_ptx.xShift1DegreeParamError(reference);
+            if(now_error < min_error){
+                min_error = now_error;
+                result = entry.getKey();
+            }
+//            result.put(entry.getKey(), now_error);
+        }
+        return result;
+    }
+
+    /**
+     * 计算现实 BPI 序列和给定 BPI 参考集中每个序列的拟合 二次多项式 的拟合参数的偏差
+     * 顶点式：y=a(x-h)^2+k，b=-2ah，c=ah^2+k，只看 a 和 k，即 a 和 c-(b^2/4a)
+     * @param points 现实 BPI 序列
+     * @return 偏差最小的参考序列在 References 中的 key
+     */
+    public static String get_2Degree_PolynomialCurve_Min_Parameter_Error(List<Point> points){
+        String result = "do not know!!!";
+        double min_error = Double.POSITIVE_INFINITY;
+        PolynomialCurve bpi_for_each_ptx = new PolynomialCurve(points, 2);
+//        Map<String, Double> result = new HashMap<>(References.size());
+        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+            PolynomialCurve reference = new PolynomialCurve(entry.getValue(), 2);
+            double now_error = bpi_for_each_ptx.xShift2DegreeParamError(reference);
+            if(now_error < min_error){
+                min_error = now_error;
+                result = entry.getKey();
+            }
+//            result.put(entry.getKey(), now_error);
+        }
+        return result;
+    }
+
+    /**
+     * 计算现实 BPI 序列和给定 BPI 参考集中每个序列的拟合多项式的最小均方误差（对于每个序列，多次平移计算均方误差并取最小值）
+     * @param points 现实 BPI 序列
+     * @param sampleRatio 采样间隔是点间隔的几倍
+     * @return 最小均方误差最小的参考序列在 References 中的 key
+     */
+    public static Pair<String, Double> get_PolynomialCurve_Min_MSE(List<Point> points, int degree, int sampleRatio){
+        String result = "do not know!!!";
+        double min_mse = Double.POSITIVE_INFINITY;
+        double min_mse_overlap_length = 0;
+        PolynomialCurve bpi_for_each_ptx = new PolynomialCurve(points, degree);
+//        Map<String, Double> result = new HashMap<>(References.size());
+        int deltaStepRatio = 5;
+        double deltaStep = (maxPtx - minPtx) / ((numPtx-1) * deltaStepRatio);
+        int xInterval = sampleRatio * deltaStepRatio; // 每两个点采一次样计算 MSE
+        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+            Pair<Double, Double> now_pair = bpi_for_each_ptx
+                    .xShiftMSE(
+                            new PolynomialCurve(Curve.remove_Y_NaN(entry.getValue()), degree),
+                            deltaStep,
+                            xInterval,
+                            minOverlapRatio
+                    );
+            double now_mse = now_pair.getLeft();
+            double now_mse_overlap_length = now_pair.getRight();
+            if((now_mse < min_mse) || (now_mse == min_mse && now_mse_overlap_length > min_mse_overlap_length)){
+                min_mse = now_mse;
+                min_mse_overlap_length = now_mse_overlap_length;
+                result = entry.getKey();
+            }
+//            result.put(entry.getKey(), now_mse);
+        }
+        return Pair.of(result, min_mse_overlap_length);
+    }
+
+    /**
+     * 计算现实 BPI 序列和给定 BPI 参考集中每个序列的折线图的最小均方误差（对于每个序列，多次平移计算均方误差并取最小值）
+     * @param points 现实 BPI 序列
+     * @param sampleRatio 采样间隔是点间隔的几倍
+     * @return 最小均方误差最小的参考序列在 References 中的 key，以及此时的 x 轴重叠宽度
+     */
+    public static Pair<String, Double> get_LineChart_Min_MSE(List<Point> points, int sampleRatio){
+        String result = "do not know!!!";
+        double min_mse = Double.POSITIVE_INFINITY;
+        double min_mse_overlap_length = 0;
+        LineChart bpi_for_each_ptx = new LineChart(points);
+//        Map<String, Double> result = new HashMap<>(References.size());
+        int deltaStepRatio = 5;
+        double deltaStep = (maxPtx - minPtx) / ((numPtx-1) * deltaStepRatio);
+        int xInterval = sampleRatio * deltaStepRatio; // 每两个点采一次样计算 MSE
+        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+            Pair<Double, Double> now_pair = bpi_for_each_ptx
+                    .xShiftMSE(
+                            new LineChart(Curve.remove_Y_NaN(entry.getValue())),
+                            deltaStep,
+                            xInterval,
+                            minOverlapRatio
+                    );
+            double now_mse = now_pair.getLeft();
+            double now_mse_overlap_length = now_pair.getRight();
+            if((now_mse < min_mse) || (now_mse == min_mse && now_mse_overlap_length > min_mse_overlap_length)){
+                min_mse = now_mse;
+                min_mse_overlap_length = now_mse_overlap_length;
+                result = entry.getKey();
+            }
+//            result.put(entry.getKey(), now_mse);
+        }
+        return Pair.of(result, min_mse_overlap_length);
+    }
+    /**
+     * 计算现实 BPI 序列和给定 BPI 参考集中每个序列的折线图的最小均方误差（对于每个序列，多次平移计算均方误差并取最小值）
+     * @param points 现实 BPI 序列
+     * @param sampleRatio 采样间隔是点间隔的几倍
+     * @return 最小均方误差最小的参考序列在 References 中的 key，以及此时的 x 轴重叠率
+     */
+    public static Pair<String, Double> get_LineChart_Coarse_Fine_Min_MSE(List<Point> points, int sampleRatio){
+        String result = "do not know!!!";
+        double min_mse = Double.POSITIVE_INFINITY;
+        double min_mse_overlap_ratio = 0;
+        LineChart bpi_for_each_ptx = new LineChart(points);
+//        Map<String, Double> result = new HashMap<>(References.size());
+        double coarseStep = (maxPtx - minPtx) / (numPtx-1) * 2;
+        double fineSearchRange = coarseStep / 2;
+        double xStep = (maxPtx - minPtx) / (numPtx-1) * sampleRatio;  // 每两个点采一次样计算 MSE
+        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+            Pair<Double, Double> now_pair = bpi_for_each_ptx
+                    .matchTwoCurves(
+                            new LineChart(Curve.remove_Y_NaN(entry.getValue())),
+                            coarseStep,
+                            fineSearchRange,
+                            xStep,
+                            minOverlapRatio
+                    );
+            double now_mse = now_pair.getLeft();
+            double now_mse_overlap_ratio = now_pair.getRight();
+            if((now_mse < min_mse) || (now_mse == min_mse && now_mse_overlap_ratio > min_mse_overlap_ratio)){
+                min_mse = now_mse;
+                min_mse_overlap_ratio = now_mse_overlap_ratio;
+                result = entry.getKey();
+            }
+//            result.put(entry.getKey(), now_mse);
+        }
+        return Pair.of(result, min_mse_overlap_ratio);
+    }
+
+    /**
+     * 计算现实BPI序列和给定BPI参考集的偏差的方差
      * @param points 折线图
      * @param start 将y轴等间距分割的起始位置
      * @param interval 将y轴等间距分割的间距
@@ -136,12 +382,12 @@ public class BpiScanSensing {
             double start,
             double interval){
         Map<String, Double> result = new HashMap<>(References.size());
-        points = remove_Infinity(points);
+        points = Curve.remove_Y_NaN(points);
         double pmaxY = points.stream().mapToDouble(Point::y).max().orElse(Double.NEGATIVE_INFINITY);
         double pminY = points.stream().mapToDouble(Point::y).min().orElse(Double.POSITIVE_INFINITY);
-        Map<Double, List<Double>> points_interval = points_to_y_interval_xs(points, start, interval, false);
+        Map<Double, List<Double>> points_interval = Curve.points_to_y_interval_xs(points, start, interval, false);
         for(Map.Entry<String, List<Point>> entry : References.entrySet()){
-            List<Point> reference = remove_Infinity(entry.getValue());
+            List<Point> reference = Curve.remove_Y_NaN(entry.getValue());
             double maxY = Math.min(
                     reference.stream().mapToDouble(Point::y).max().orElse(Double.NEGATIVE_INFINITY),
                     pmaxY);
@@ -152,7 +398,7 @@ public class BpiScanSensing {
             if(maxY < minY){
                 variance = Double.POSITIVE_INFINITY;
             } else {
-                Map<Double, List<Double>> reference_interval = points_to_y_interval_xs(reference, start, interval, false);
+                Map<Double, List<Double>> reference_interval = Curve.points_to_y_interval_xs(reference, start, interval, false);
                 List<Double> errors = new ArrayList<>();
                 double minY_interval = start + Math.ceil((minY - start) / interval) * interval;
                 for (double nowy = minY_interval; nowy <= maxY; nowy += interval) {
@@ -180,26 +426,27 @@ public class BpiScanSensing {
     }
 
     /**
-     * 计算现实BPI序列和给定BPI序列的偏差方差
+     * 计算现实BPI序列和给定BPI序列的偏差的方差
      * @param reference 参考图
      * @param points 折线图
      * @param start 将y轴等间距分割的起始位置
      * @param interval 将y轴等间距分割的间距
-     * @param reference_hasInfinity reference点集中是否有无穷点
-     * @param points_hasInfinity points点集中是否有无穷点
+     * @param reference_hasNaN reference点集中是否有 y=NaN 点
+     * @param points_hasNaN points点集中是否有 y=NaN 点
+     * @return 现实 BPI 序列和给定 BPI 序列的 x 轴偏差的方差
      */
     public static double get_Variance_of_Error(
             List<Point> reference,
             List<Point> points,
             double start,
             double interval,
-            boolean reference_hasInfinity,
-            boolean points_hasInfinity){
-        if(reference_hasInfinity){
-            reference = remove_Infinity(reference);
+            boolean reference_hasNaN,
+            boolean points_hasNaN){
+        if(reference_hasNaN){
+            reference = Curve.remove_Y_NaN(reference);
         }
-        if(points_hasInfinity){
-            points = remove_Infinity(points);
+        if(points_hasNaN){
+            points = Curve.remove_Y_NaN(points);
         }
         if(interval<0) interval = -interval;
         double maxY = Math.min(
@@ -209,8 +456,8 @@ public class BpiScanSensing {
                 reference.stream().mapToDouble(Point::y).min().orElse(Double.POSITIVE_INFINITY),
                 points.stream().mapToDouble(Point::y).min().orElse(Double.POSITIVE_INFINITY));
         if(maxY < minY) return Double.POSITIVE_INFINITY;
-        Map<Double, List<Double>> reference_interval = points_to_y_interval_xs(reference, start, interval, false);
-        Map<Double, List<Double>> points_interval = points_to_y_interval_xs(points, start, interval, false);
+        Map<Double, List<Double>> reference_interval = Curve.points_to_y_interval_xs(reference, start, interval, false);
+        Map<Double, List<Double>> points_interval = Curve.points_to_y_interval_xs(points, start, interval, false);
         List<Double> errors = new ArrayList<>();
         double minY_interval = start + Math.ceil((minY-start)/interval)*interval;
         for(double nowy=minY_interval; nowy<=maxY; nowy+=interval){
@@ -225,397 +472,4 @@ public class BpiScanSensing {
         return MathUtils.calculateVariance(errors);
     }
 
-    /**
-     * 扫频获取BPI
-     */
-    public static List<Point> get_BPI_for_each_Ptx()
-            throws OctaneSdkException, InterruptedException {
-
-        // 先停止阅读器
-        ReaderOperations.stopReader();
-
-//        // 设置 EPC 过滤
-//        Settings settings = READER.querySettings();
-//        FilterSettings filterSettings = settings.getFilters();
-//        TagFilter filter1 = filterSettings.getTagFilter1();
-//        filter1.setFilterOp(TagFilterOp.Match);
-//        filter1.setMemoryBank(MemoryBank.Epc);
-//        filter1.setBitPointer(32);
-//        filter1.setBitCount(96);
-//        filter1.setTagMask(BPI_Tag_EPC);
-//        filterSettings.setTagFilter1(filter1);
-//        settings.setFilters(filterSettings);
-//        READER.applySettings(settings);
-
-        // 创建标签报告监听器
-        readLatch = new CountDownLatch(1);
-        bpiScanListener = new BpiScanListener(BPI_Tag_EPC, readLatch);
-        READER.setTagReportListener(bpiScanListener);
-
-        // 读写器支持的功率
-        FeatureSet features = READER.queryFeatureSet();
-        List<TxPowerTableEntry> listPtx = features.getTxPowers();
-        List<Point> Ptx_Bpi_Image = new ArrayList<>(listPtx.size());
-//        for(TxPowerTableEntry p : listPtx){
-//            System.out.println(p.Dbm);
-//        }
-
-//        // 只启用目标天线
-//        Settings settings = READER.querySettings();
-//        AntennaConfigGroup antennas = settings.getAntennas();
-//        antennas.disableAll();
-////        antennas.enableById(new short[]{ (short)targetAntenna });
-//        AntennaConfig antennaConfig = antennas.getAntenna(targetAntenna);
-//        antennaConfig.setEnabled(true);
-//        antennaConfig.setIsMaxTxPower(false);
-//        READER.applySettings(settings);
-
-        minPtx = listPtx.getFirst().Dbm;
-        maxPtx = listPtx.getLast().Dbm;
-
-        // 扫频测试
-        System.out.println("\n开始扫频测试...");
-//        System.out.println("天线端口: " + targetAntenna);
-        System.out.println("功率测试范围: " + minPtx + "dBm 到 " + maxPtx + "dBm");
-        System.out.println("==========================================");
-
-        // 首先检查最大功率是否能检测到标签
-        double maxRssi = get_Rssi_at_now_Ptx(maxPtx);
-        if (Double.isNaN(maxRssi)) {
-            System.out.println("错误: 在最大功率 " + maxPtx + "dBm 下未检测到标签！");
-            System.out.println("请检查: 1. 标签距离 2. 天线连接 3. 标签是否正常工作");
-        }
-
-        // 逐个检测不同输出功率的RSSI
-        for (TxPowerTableEntry now : listPtx) {
-            double nowPtx = now.Dbm;
-            System.out.println("\n--- 当前输出功率：" + nowPtx + "Dbm ---");
-
-            double nowRssi = get_Rssi_at_now_Ptx(nowPtx);
-
-            if (!Double.isNaN(nowRssi)) {
-                System.out.println("√ 检测到标签，RSSI 为：" + nowRssi + "Dbm");
-            } else {
-                System.out.println("× 未检测到标签");
-                nowRssi = noListenedRssi;
-            }
-            Ptx_Bpi_Image.add(new Point(nowPtx, nowRssi + nowPtx));
-        }
-
-        // 停止阅读器
-        ReaderOperations.stopReader();
-
-        return Ptx_Bpi_Image;
-    }
-
-    /**
-     * 在指定功率级别测试标签检测
-     * @param nowPtx 测试功率
-     * @return 检测到的RSSI
-     */
-    private static double get_Rssi_at_now_Ptx(double nowPtx)
-            throws OctaneSdkException, InterruptedException {
-
-        // 先停止阅读器
-        ReaderOperations.stopReader();
-
-        // 设置当前功率
-        Settings settings = READER.querySettings();
-        AntennaConfigGroup antennas = settings.getAntennas();
-        for(AntennaConfig ac : antennas){
-            if(ac.isEnabled()) {
-                ac.setIsMaxTxPower(false);
-                ac.setTxPowerinDbm(nowPtx);
-            }
-        }
-        settings.setAntennas(antennas);
-        READER.applySettings(settings);
-
-        // 读取标签
-        readLatch = new CountDownLatch(1);
-        bpiScanListener.readLatch = readLatch;
-        ReaderOperations.startReader();
-
-        // 等待读取完成（最多 500 毫秒）
-        boolean tagDetected = readLatch.await(500, TimeUnit.MILLISECONDS);
-
-        // 停止阅读器
-        ReaderOperations.stopReader();
-
-        if (tagDetected) {
-            System.out.println("能读到指定标签");
-        } else {
-            System.out.println("不能读到指定标签");
-        }
-
-        double rssi = bpiScanListener.rssi;
-        bpiScanListener.rssi = Double.NaN;
-        return rssi;
-    }
-
-    /**
-     * 去掉所有负无穷点，保留其他
-     * @param points 原始点列表
-     * @return 处理后的点列表
-     */
-    public static List<Point> remove_Infinity(List<Point> points) {
-        return points.stream()
-                .filter(p -> (!Double.isNaN(p.y())) && Double.isFinite(p.y()))
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 将不在两边的负无穷点替换为插值纵坐标
-     * 假设点列表已按 x 升序排序。
-     * 1. 保留两端的负无穷点
-     * 2. 对中间的负无穷点进行线性插值
-     * @param points 原始点列表
-     * @return 处理后的点列表
-     */
-    public static List<Point> interpolate_Middle_Infinity(List<Point> points) {
-        int length = points.size();
-        List<Integer> finits = new ArrayList<>();
-        List<Point> result = new ArrayList<>(points);
-        for(int i=0; i<length; ++i){
-            Point p = points.get(i);
-            if((!Double.isNaN(p.y())) && Double.isFinite(p.y())){
-               finits.add(i);
-            }
-        }
-        int finits_num = finits.size();
-        if(finits_num < 2) return result;
-
-        for(int finits_index=0; finits_index<finits_num; ++finits_index){
-            int current = finits.get(finits_index);
-            int next = finits.get(finits_index+1);
-            Point cp = result.get(current);
-            Point np = result.get(next);
-            int num = next - current;
-            double interval = (np.y() - cp.y()) / num;
-            double start = cp.y();
-            for(int i=1; i<num; ++i){
-                current++;
-                double x = result.get(current).x();
-                result.set(current, new Point(x, start+interval*i));
-            }
-        }
-        return result;
-    }
-
-    /**
-     * 将负无穷点替换为插值纵坐标
-     * 假设点列表已按 x 升序排序。
-     * 1. 两边的替换为最外侧有效值
-     * 2. 中间的根据折线图插值
-     * 假设点列表已按 x 升序排序。
-     * @param points 原始点列表
-     * @return 处理后的点列表
-     */
-    public static List<Point> interpolate_All_Infinity(List<Point> points) {
-        int length = points.size();
-        List<Integer> finits = new ArrayList<>();
-        List<Point> result = new ArrayList<>(points);
-        for(int i=0; i<length; ++i){
-            Point p = points.get(i);
-            if((!Double.isNaN(p.y())) && Double.isFinite(p.y())){
-                finits.add(i);
-            }
-        }
-        int finits_num = finits.size();
-        if(finits_num < 1){
-            return result.stream().map(p -> new Point(p.x(), 0)).collect(Collectors.toList());
-        } else {
-            int first = finits.getFirst();
-            int last = finits.getLast();
-            for(int i=0; i<first; ++i){
-                result.set(i, new Point(points.get(i).x(), points.get(first).y()));
-            }
-            for(int i=length-1; i>last; --i){
-                result.set(i, new Point(points.get(i).x(), points.get(last).y()));
-            }
-        }
-
-        for(int finits_index=0; finits_index<finits_num; ++finits_index){
-            int current = finits.get(finits_index);
-            int next = finits.get(finits_index+1);
-            Point cp = result.get(current);
-            Point np = result.get(next);
-            int num = next - current;
-            double interval = (np.y() - cp.y()) / num;
-            double start = cp.y();
-            for(int i=1; i<num; ++i){
-                current++;
-                double x = result.get(current).x();
-                result.set(current, new Point(x, start+interval*i));
-            }
-        }
-        return result;
-    }
-
-    /**
-     * 去掉所有负无穷点，折线中间的负无穷点用折线图对应位置的点替换
-     * 假设点列表已按 x 升序排序。
-     * 1. 去掉两端的负无穷点
-     * 2. 对中间的负无穷点进行线性插值
-     * @param points 原始点列表
-     * @return 处理后的点列表
-     */
-    public static List<Point> replace_Infinity(List<Point> points) {
-        int length = points.size();
-        List<Integer> finits = new ArrayList<>();
-        List<Point> result = new ArrayList<>();
-        for(int i=0; i<length; ++i){
-            Point p = points.get(i);
-            if((!Double.isNaN(p.y())) && Double.isFinite(p.y())){
-                finits.add(i);
-            }
-        }
-        int finits_num = finits.size();
-        if(finits_num < 1) return result;
-
-        Point first = points.get(finits.getFirst());
-        result.add(new Point(first.x(), first.y()));
-        for(int finits_index=0; finits_index<finits_num; ++finits_index){
-            int current = finits.get(finits_index);
-            int next = finits.get(finits_index+1);
-            Point cp = points.get(current);
-            Point np = points.get(next);
-            int num = next - current;
-            double interval = (np.y() - cp.y()) / num;
-            double start = cp.y();
-            for(int i=1; i<num; ++i){
-                current++;
-                double x = points.get(current).x();
-                result.add(new Point(x, start+interval*i));
-            }
-            result.add(new Point(np.x(), np.y()));
-        }
-        return result;
-    }
-
-    /**
-     * 将折线图转换成y轴等间距的点集
-     * @param points 折线图
-     * @param start 将y轴等间距分割的起始位置
-     * @param interval 将y轴等间距分割的间距
-     * @param hasInfinity points点集中是否有无穷点
-     * @return 处理后的点集
-     */
-    public static List<Point> points_to_y_interval_points(
-            List<Point> points,
-            double start,
-            double interval,
-            boolean hasInfinity){
-        if(hasInfinity){
-            points = replace_Infinity(points);
-        }
-        if(interval<0) interval = -interval;
-        List<Point> result = new ArrayList<>();
-        for(int i=0; i<points.size()-1; ++i){
-            Point current = points.get(i);
-            Point next = points.get(i+1);
-            double cx = current.x();
-            double cy = current.y();
-            double nx = next.x();
-            double ny = next.y();
-            double dx = nx - cx;
-            double dy = ny - cy;
-            double intervaly = (cy<ny)?interval:(-interval);
-            double intervalx = intervaly/dy*dx;
-            double firsty = start + Math.ceil((cy-start)/interval)*interval;
-            double firstx = cx + (firsty-cy)/dy*dx;
-            while(firstx <= nx){
-                result.add(new Point(firstx, firsty));
-                firsty += intervaly;
-                firstx += intervalx;
-            }
-        }
-        return result;
-    }
-
-    /**
-     * 折线图与y轴分隔线的交点集合
-     * @param points 折线图
-     * @param start 将y轴等间距分割的起始位置
-     * @param interval 将y轴等间距分割的间距
-     * @param hasInfinity points点集中是否有无穷点
-     * @return 每个y值对应的x值集合
-     */
-    public static Map<Double, List<Double>> points_to_y_interval_xs(
-            List<Point> points,
-            double start,
-            double interval,
-            boolean hasInfinity){
-        if(hasInfinity){
-            points = replace_Infinity(points);
-        }
-        if(interval<0) interval = -interval;
-        Map<Double, List<Double>> result = new HashMap<>();
-        double maxy = points.stream().mapToDouble(Point::y).max().orElse(Double.NEGATIVE_INFINITY);
-        double miny = points.stream().mapToDouble(Point::y).min().orElse(Double.POSITIVE_INFINITY);
-        if(maxy < miny) return result;
-        double miny_interval = start + Math.ceil((miny-start)/interval)*interval;
-        for(double nowy=miny_interval; nowy<=maxy; nowy+=interval){
-            result.put(nowy, new ArrayList<>());
-        }
-        for(int i=0; i<points.size()-1; ++i){
-            Point current = points.get(i);
-            Point next = points.get(i+1);
-            double cx = current.x();
-            double cy = current.y();
-            double nx = next.x();
-            double ny = next.y();
-            double dx = nx - cx;
-            double dy = ny - cy;
-            double intervaly = (cy<ny)?interval:(-interval);
-            double intervalx = intervaly/dy*dx;
-            double firsty = start + Math.ceil((cy-start)/interval)*interval;
-            double firstx = cx + (firsty-cy)/dy*dx;
-            while(firstx < nx){
-                result.get(firsty).add(firstx);
-                firsty += intervaly;
-                firstx += intervalx;
-            }
-        }
-        Point last = points.getLast();
-        if((last.y()-start)%interval==0){
-            result.get(last.y()).add(last.x());
-        }
-        return result;
-    }
-
-    /**
-     * 线性插值：在给定点列表折线图中，根据 x 值插值得到 y 值。
-     * 假设点列表已按 x 升序排序。
-     * 假设不包含无穷点
-     * @param points 点列表
-     * @param x 目标 x 坐标
-     * @return 插值得到的 y 值
-     */
-    private static double interpolateY(List<Point> points, double x) {
-        if (points == null || points.isEmpty()) {
-            throw new IllegalArgumentException("点列表不能为空");
-        }
-
-        // 处理边界情况
-        if (x <= points.getFirst().x()) {
-            return points.getFirst().y();
-        }
-        if (x >= points.getLast().x()) {
-            return points.getLast().y();
-        }
-
-        // 查找 x 所在的区间并进行线性插值
-        for (int i = 0; i < points.size() - 1; i++) {
-            Point p1 = points.get(i);
-            Point p2 = points.get(i + 1);
-            if (x >= p1.x() && x <= p2.x()) {
-                double t = (x - p1.x()) / (p2.x() - p1.x());
-                return p1.y() + t * (p2.y() - p1.y());
-            }
-        }
-
-        // 理论上不会执行到这里
-        return points.getLast().y();
-    }
 }

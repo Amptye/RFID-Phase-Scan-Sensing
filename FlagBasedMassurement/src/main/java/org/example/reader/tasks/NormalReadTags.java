@@ -1,22 +1,13 @@
 package org.example.reader.tasks;
 
 import com.impinj.octane.*;
-import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
-import com.typesafe.config.ConfigFactory;
 import org.example.reader.ReaderOperations;
 import org.example.reader.listener.TagOpCompleteListenerImplementation;
 import org.example.reader.listener.TagReportListenerImplementation;
-import org.example.util.Point;
-import org.llrp.ltk.generated.enumerations.C1G2StateUnawareAction;
 
-import java.nio.file.Path;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Scanner;
-import java.util.Set;
 
 public class NormalReadTags {
     public static ImpinjReader READER = ReaderOperations.READER;

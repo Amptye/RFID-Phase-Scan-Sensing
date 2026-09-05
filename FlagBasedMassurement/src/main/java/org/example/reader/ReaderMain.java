@@ -27,8 +27,8 @@ public class ReaderMain {
             ReaderOperations.configReader();
 
             // 先扫频
-//            BpiReference.run();
-            BpiScanSensing.run();
+            BpiReference.run();
+//            BpiScanSensing.run();
 
             // 停止阅读器
             ReaderOperations.stopReader();

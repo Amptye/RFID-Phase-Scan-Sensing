@@ -37,6 +37,11 @@
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
         </dependency>
+        <!-- 数学工具 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-math3</artifactId>
+        </dependency>
         <!-- Spring Boot Starter -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

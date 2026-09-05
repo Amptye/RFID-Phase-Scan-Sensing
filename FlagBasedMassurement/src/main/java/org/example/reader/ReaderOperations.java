@@ -4,14 +4,10 @@ import com.impinj.octane.*;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
-import org.example.util.MyStringUtils;
+import org.example.util.text.MyStringUtils;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.Objects;
 
 public class ReaderOperations {
@@ -38,7 +34,13 @@ public class ReaderOperations {
                         .getResource("settings.json")
         ).toURI().getPath();
         Settings settings = Settings.load(settings_path);
+        System.out.println(settings.getFilters().getMode());
+        System.out.println(settings.getFilters().getTagFilter1().getTagMask());
+        System.out.println(settings.getFilters().getTagFilter1().getFilterOp());
         READER.applySettings(settings);
+        System.out.println(READER.querySettings().getFilters().getMode());
+        System.out.println(READER.querySettings().getFilters().getTagFilter1().getTagMask());
+        System.out.println(READER.querySettings().getFilters().getTagFilter1().getFilterOp());
 //        ArrayList<AntennaConfig> acList = settings.getAntennas().getAntennaConfigs();
 //        for (AntennaConfig ac : acList) {
 //            if (ac.isEnabled()) {

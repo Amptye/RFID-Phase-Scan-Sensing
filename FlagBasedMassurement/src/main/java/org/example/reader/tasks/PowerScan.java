@@ -13,7 +13,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Impinj读写器功率扫描程序（二分查找优化版）
+ * Impinj读写器功率扫描程序（二分查找优化版）。
  * 功能：通过单天线使用二分查找算法，快速寻找标签刚好被激活的最小输出功率
  */
 public class PowerScan {
@@ -173,8 +173,8 @@ public class PowerScan {
         readLatch = new CountDownLatch(1);
         ReaderOperations.startReader();
 
-        // 等待读取完成（最多 500 毫秒）
-        boolean tagDetected = readLatch.await(500, TimeUnit.MILLISECONDS);
+        // 等待读取完成（最多 300 毫秒）
+        boolean tagDetected = readLatch.await(300, TimeUnit.MILLISECONDS);
 
         // 停止阅读器
         ReaderOperations.stopReader();

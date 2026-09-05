@@ -5,7 +5,7 @@ import org.example.reader.ReaderMain;
 import org.example.reader.ReaderOperations;
 import org.example.data.tagdata.MyTagData;
 import org.example.data.tagdata.TagDataCache;
-import org.example.util.JacksonJsonConverter;
+import org.example.util.text.JacksonJsonConverter;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

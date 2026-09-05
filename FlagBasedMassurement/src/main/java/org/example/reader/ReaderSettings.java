@@ -4,6 +4,7 @@ import com.impinj.octane.*;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigList;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -36,6 +37,7 @@ public class ReaderSettings {
             settings.setSession(settings_conf.getInt("Session")); // Session 1
             settings.setTagPopulationEstimate(settings_conf.getInt("TagPopulationEstimate"));
             settings.getFilters().setMode(TagFilterMode.valueOf(settings_conf.getString("filters.Mode")));
+
             ArrayList<AntennaConfig> acList = settings.getAntennas().getAntennaConfigs();
             List<? extends  Config> antennas_conf = config.getConfigList("antennas");
             for (int i=0; i<acList.size() && i<antennas_conf.size(); ++i) {
@@ -45,8 +47,8 @@ public class ReaderSettings {
                 ac.setIsMaxTxPower(ac_conf.getBoolean("IsMaxTxPower"));
                 ac.setTxPowerinDbm(ac_conf.getInt("TxPowerinDbm")); //(20); (31.5);
                 ac.setIsMaxRxSensitivity(ac_conf.getBoolean("IsMaxRxSensitivity"));
-//                ac.setRxSensitivityinDbm();
             }
+
             ReportConfig r = settings.getReport();
             Config report_conf = settings_conf.getConfig("report");
             r.setIncludeAntennaPortNumber(report_conf.getBoolean("IncludeAntennaPortNumber"));
@@ -60,29 +62,62 @@ public class ReaderSettings {
             r.setIncludePhaseAngle(report_conf.getBoolean("IncludePhaseAngle"));
             r.setMode(ReportMode.valueOf(report_conf.getString("Mode")));
             settings.setReport(r);
+
             // Select a subset of tags in the environment.
-            int filters_num = 2;
-            List<? extends Config> filters_conf = config.getConfigList("filters");
-            MethodHandles.Lookup lookup = MethodHandles.lookup();
-            for(int i=0; i<filters_num && i<filters_conf.size(); ++i) {
-                MethodHandle mh = lookup.findVirtual(FilterSettings.class, "getTagFilter"+(i+1),
-                        MethodType.methodType(TagFilter.class));
-//                TagFilter tf = settings.getFilters().getTagFilter1();
-                TagFilter tf = null;
-                try {
-                    tf = (TagFilter) mh.invokeExact(settings.getFilters());
-                } catch (Throwable th){
-                    System.out.println("Filter"+(i+1)+" is wrong");
-                    th.printStackTrace();
-                }
-                Config tf_conf = filters_conf.get(i);
+            List<? extends Config> filters_conf = config.getConfigList("select_filters");
+            List<TagSelectFilter> filterList = new ArrayList<>();
+            for (Config tf_conf : filters_conf) {
+                TagSelectFilter tf = new TagSelectFilter();
                 tf.setBitPointer(tf_conf.getInt("BitPointer"));
                 tf.setBitCount(tf_conf.getInt("BitCount"));
                 tf.setMemoryBank(MemoryBank.valueOf(tf_conf.getString("MemoryBank")));
-                tf.setFilterOp(TagFilterOp.valueOf(tf_conf.getString("FilterOp")));
-                // If the first 32 bits of a tag's ID matches "20210414", it will reply to the reader.
                 tf.setTagMask(tf_conf.getString("TagMask"));
+                tf.setMatchingAction(TagFilterStateUnawareAction.valueOf(tf_conf.getString("MatchingAction")));
+                tf.setNonMatchingAction(TagFilterStateUnawareAction.valueOf(tf_conf.getString("NonMatchingAction")));
+                filterList.add(tf);
             }
+            settings.getFilters().setTagSelectFilterList(filterList);
+
+            Config f1_conf = config.hasPath("filter1") ? config.getConfig("filter1") : null;
+            if(f1_conf != null) {
+                TagFilter f1 = settings.getFilters().getTagFilter1();
+                f1.setBitPointer(f1_conf.getInt("BitPointer"));
+                f1.setBitCount(f1_conf.getInt("BitCount"));
+                f1.setMemoryBank(MemoryBank.valueOf(f1_conf.getString("MemoryBank")));
+                f1.setFilterOp(TagFilterOp.valueOf(f1_conf.getString("FilterOp")));
+                f1.setTagMask(f1_conf.getString("TagMask"));
+            }
+            Config f2_conf = config.hasPath("filter2") ? config.getConfig("filter2") : null;
+            if(f2_conf != null) {
+                TagFilter f2 = settings.getFilters().getTagFilter2();
+                f2.setBitPointer(f2_conf.getInt("BitPointer"));
+                f2.setBitCount(f2_conf.getInt("BitCount"));
+                f2.setMemoryBank(MemoryBank.valueOf(f2_conf.getString("MemoryBank")));
+                f2.setFilterOp(TagFilterOp.valueOf(f2_conf.getString("FilterOp")));
+                f2.setTagMask(f2_conf.getString("TagMask"));
+            }
+//            int filters_num = 2;
+//            List<? extends Config> filters_conf = config.getConfigList("filters");
+//            MethodHandles.Lookup lookup = MethodHandles.lookup();
+//            for(int i=0; i<filters_num && i<filters_conf.size(); ++i) {
+//                MethodHandle mh = lookup.findVirtual(FilterSettings.class, "getTagFilter"+(i+1),
+//                        MethodType.methodType(TagFilter.class));
+////                TagFilter tf = settings.getFilters().getTagFilter1();
+//                TagFilter tf = null;
+//                try {
+//                    tf = (TagFilter) mh.invokeExact(settings.getFilters());
+//                } catch (Throwable th){
+//                    System.out.println("Filter"+(i+1)+" is wrong");
+//                    th.printStackTrace();
+//                }
+//                Config tf_conf = filters_conf.get(i);
+//                tf.setBitPointer(tf_conf.getInt("BitPointer"));
+//                tf.setBitCount(tf_conf.getInt("BitCount"));
+//                tf.setMemoryBank(MemoryBank.valueOf(tf_conf.getString("MemoryBank")));
+//                tf.setFilterOp(TagFilterOp.valueOf(tf_conf.getString("FilterOp")));
+//                // If the first 32 bits of a tag's ID matches "20210414", it will reply to the reader.
+//                tf.setTagMask(tf_conf.getString("TagMask"));
+//            }
             try {
                 String settings_path = ReaderSettings.class.getClassLoader().getResource("settings.json").toURI().getPath();
 //            settings_path = URLDecoder.decode(settings_path, StandardCharsets.UTF_8.toString());
