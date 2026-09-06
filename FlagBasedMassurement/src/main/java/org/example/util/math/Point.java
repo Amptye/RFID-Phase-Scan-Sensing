@@ -1,5 +1,6 @@
 package org.example.util.math;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.example.util.text.MyStringUtils;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -121,6 +122,77 @@ public record Point(double x, double y) {
 
         return result;
     }
+
+    /**
+     * 读取目录下所有JSON文件到List<Pair>
+     * @param directory 目录路径
+     * @return List<Pair<文件名, List<Point>>>
+     */
+    public static List<Pair<String, List<Point>>> loadPointsPairsFromJsonFiles(Path directory) throws IOException {
+        if (!Files.exists(directory) || !Files.isDirectory(directory)) {
+            throw new IllegalArgumentException("目录不存在: " + directory);
+        }
+
+        List<Pair<String, List<Point>>> result = new ArrayList<>();
+
+        try (var stream = Files.list(directory)) {
+            stream.filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".json"))
+                    .forEach(filePath -> {
+                        try {
+                            // 读取JSON文件
+                            List<Point> points = loadPointsFromJsonFile(filePath);
+
+                            // 获取文件名（不含后缀）
+                            String fileName = MyStringUtils.removeSuffix(filePath.getFileName().toString(), ".json");
+
+                            // 放入List
+                            result.add(Pair.of(fileName, points));
+
+                        } catch (Exception e) {
+                            System.err.println("读取文件失败: " + filePath + ", 错误: " + e.getMessage());
+                        }
+                    });
+        }
+
+        return result;
+    }
+
+    /**
+     * 读取目录下所有JSON文件到List
+     * @param directory 目录路径
+     * @return List<List<Point>>
+     */
+    public static List<List<Point>> loadPointsListFromJsonFiles(Path directory) throws IOException {
+        if (!Files.exists(directory) || !Files.isDirectory(directory)) {
+            throw new IllegalArgumentException("目录不存在: " + directory);
+        }
+
+        List<List<Point>> result = new ArrayList<>();
+
+        try (var stream = Files.list(directory)) {
+            stream.filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".json"))
+                    .forEach(filePath -> {
+                        try {
+                            // 读取JSON文件
+                            List<Point> points = loadPointsFromJsonFile(filePath);
+
+                            // 获取文件名（不含后缀）
+                            String fileName = MyStringUtils.removeSuffix(filePath.getFileName().toString(), ".json");
+
+                            // 放入Map
+                            result.add(points);
+
+                        } catch (Exception e) {
+                            System.err.println("读取文件失败: " + filePath + ", 错误: " + e.getMessage());
+                        }
+                    });
+        }
+
+        return result;
+    }
+
 
     /**
      * 追加 Point 到现有文件

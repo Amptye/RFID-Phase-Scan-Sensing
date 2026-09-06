@@ -93,10 +93,11 @@ def plot_multiple_json_files(folder_path, output_dir="figures", output_file_name
     """
     
     # 查找所有JSON文件
-    json_files = []
-    for file in os.listdir(folder_path):
-        if file.lower().endswith('.json'):
-            json_files.append(os.path.join(folder_path, file))
+    # json_files = []
+    # for file in os.listdir(folder_path):
+    #     if file.lower().endswith('.json'):
+    #         json_files.append(os.path.join(folder_path, file))
+    json_files = list(Path(folder_path).rglob("*.json"))
     
     if not json_files:
         print(f"警告：在 {folder_path} 中没有找到JSON文件")
@@ -104,12 +105,14 @@ def plot_multiple_json_files(folder_path, output_dir="figures", output_file_name
     
     print(f"找到 {len(json_files)} 个JSON文件:")
     for file in json_files:
-        print(f"  - {os.path.basename(file)}")
+        # print(f"  - {os.path.basename(file)}")
+        relative_path = file.relative_to(folder_path)
+        print(f"  - {relative_path}")
     
     plt.figure(figsize=(12, 8))
     
     colors = plt.cm.tab10.colors  # 使用不同的颜色
-    markers = ['o', 's', '^', 'v', '<', '>', 'p', '*', 'h', 'D']  # 不同的标记
+    markers = ['o', 's', '^', 'v', '<', '>', 'p', '*', '+', 'x', 'h', 'H', 'd', 'D', '|', '_']  # 不同的标记
     linestyles = ['-', '--', '-.', ':']  # 不同的线型
     
     legend_labels = []
@@ -136,8 +139,11 @@ def plot_multiple_json_files(folder_path, output_dir="figures", output_file_name
             linestyle = linestyles[idx % len(linestyles)]
             
             # 绘制曲线
-            filename = os.path.basename(json_file)
-            label = os.path.splitext(filename)[0]  # 去掉扩展名作为图例标签
+            # filename = os.path.basename(json_file)
+            # label = os.path.splitext(filename)[0]  # 去掉扩展名作为图例标签
+            relative_path = json_file.relative_to(folder_path)
+            label = relative_path.with_suffix("")  # 去掉扩展名作为图例标签
+
             
             plt.plot(x_values, y_values, 
                     marker=marker, 

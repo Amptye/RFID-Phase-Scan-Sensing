@@ -12,15 +12,14 @@ import org.example.util.math.Point;
 import org.example.util.math.plot.Curve;
 import org.example.util.math.plot.LineChart;
 import org.example.util.math.plot.PolynomialCurve;
+import org.example.util.text.MyStringUtils;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class BpiScanSensing {
     public static ImpinjReader READER = ReaderOperations.READER;
@@ -30,7 +29,8 @@ public class BpiScanSensing {
     public static int numPtx = 91;
     public static double minOverlapRatio = 1;
     public static double minOverlapWidth = 0;
-    public static Map<String, List<Point>> References;
+    public static List<Pair<String, List<Point>>> References;
+    public static boolean feature_lineSet = false;
     public static boolean Record_Scan_Data = false;
     public static String Tag_Feature = "";
     public static Path DATA_DIR = Path.of("data");
@@ -94,6 +94,9 @@ public class BpiScanSensing {
                     : "unknown_distance";
             distance_DIR = feature_DATA_DIR.resolve(distance);
 
+            feature_lineSet = config.hasPath("feature_lineSet")
+                    && config.getBoolean("feature_lineSet");
+
             Record_Scan_Data = config.hasPath("record_scan_data")
                     && config.getBoolean("record_scan_data");
 
@@ -135,8 +138,30 @@ public class BpiScanSensing {
             maxPtx = BpiTest.maxPtx;
             numPtx = BpiTest.numPtx;
 
-            References = Point.loadPointsMapFromJsonFiles(distance_DIR);
-            References.replaceAll((key,value)->Curve.remove_Y_NaN(value));
+            if(!feature_lineSet) {
+                References = Point.loadPointsPairsFromJsonFiles(distance_DIR);
+            } else {
+                References = new ArrayList<>();
+                try (var stream = Files.list(distance_DIR)) {
+                    stream.filter(Files::isDirectory)
+                            .forEach(feature -> {
+                                try {
+                                    // 读取该 feature 目录中所有JSON文件
+                                    List<List<Point>> curves = Point.loadPointsListFromJsonFiles(feature);
+
+                                    // 放入 References
+                                    curves.forEach(line ->
+                                            References.add(Pair.of(feature.toString(), line)));
+
+                                } catch (Exception e) {
+                                    System.err.println("读取文件失败: " + feature + ", 错误: " + e.getMessage());
+                                }
+                            });
+                }
+            }
+            References.replaceAll(value ->
+                    Pair.of(value.getLeft(), Curve.remove_Y_NaN(value.getRight())));
+
             List<Point> bpi_for_each_ptx = Curve.remove_Y_NaN(BpiTest.bpiList);
             minOverlapRatio = 0.95;
 //            minOverlapWidth = minOverlapRatio * (bpi_for_each_ptx.getLast().x() - bpi_for_each_ptx.getFirst().x());
@@ -147,8 +172,11 @@ public class BpiScanSensing {
 
             System.out.println("========================================================");
             System.out.println("使用平滑后的曲线，平滑窗口长度为 5：");
-            References.replaceAll((key,value)->Curve.smoothCurve(value,5));
-            bpi_for_each_ptx = Curve.smoothCurve(bpi_for_each_ptx,5);
+            int windowSize = 5;
+            References.replaceAll(value ->
+                    Pair.of(value.getLeft(), Curve.smoothCurve(value.getRight(), windowSize)));
+
+            bpi_for_each_ptx = Curve.smoothCurve(bpi_for_each_ptx, windowSize);
             judgeTask(bpi_for_each_ptx);
 
 //            // 不同点的偏差的方差
@@ -166,6 +194,7 @@ public class BpiScanSensing {
 //            }
 
 //            System.out.println("=== 估计状态为：" + tag_feature + " ===");
+
         } catch (ConfigException.IO ec){
             System.out.println("无法找到 config.conf 文件");
         } catch (Exception ex) {
@@ -230,15 +259,13 @@ public class BpiScanSensing {
         String result = "do not know!!!";
         double min_error = Double.POSITIVE_INFINITY;
         PolynomialCurve bpi_for_each_ptx = new PolynomialCurve(points, 1);
-//        Map<String, Double> result = new HashMap<>(References.size());
-        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+        for (Map.Entry<String, List<Point>> entry : References) {
             PolynomialCurve reference = new PolynomialCurve(entry.getValue(), 1);
             double now_error = bpi_for_each_ptx.xShift1DegreeParamError(reference);
-            if(now_error < min_error){
+            if (now_error < min_error) {
                 min_error = now_error;
                 result = entry.getKey();
             }
-//            result.put(entry.getKey(), now_error);
         }
         return result;
     }
@@ -253,15 +280,13 @@ public class BpiScanSensing {
         String result = "do not know!!!";
         double min_error = Double.POSITIVE_INFINITY;
         PolynomialCurve bpi_for_each_ptx = new PolynomialCurve(points, 2);
-//        Map<String, Double> result = new HashMap<>(References.size());
-        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+        for (Map.Entry<String, List<Point>> entry : References) {
             PolynomialCurve reference = new PolynomialCurve(entry.getValue(), 2);
             double now_error = bpi_for_each_ptx.xShift2DegreeParamError(reference);
-            if(now_error < min_error){
+            if (now_error < min_error) {
                 min_error = now_error;
                 result = entry.getKey();
             }
-//            result.put(entry.getKey(), now_error);
         }
         return result;
     }
@@ -281,7 +306,7 @@ public class BpiScanSensing {
         int deltaStepRatio = 5;
         double deltaStep = (maxPtx - minPtx) / ((numPtx-1) * deltaStepRatio);
         int xInterval = sampleRatio * deltaStepRatio; // 每两个点采一次样计算 MSE
-        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+        for(Map.Entry<String,List<Point>> entry : References){
             Pair<Double, Double> now_pair = bpi_for_each_ptx
                     .xShiftMSE(
                             new PolynomialCurve(Curve.remove_Y_NaN(entry.getValue()), degree),
@@ -316,7 +341,7 @@ public class BpiScanSensing {
         int deltaStepRatio = 5;
         double deltaStep = (maxPtx - minPtx) / ((numPtx-1) * deltaStepRatio);
         int xInterval = sampleRatio * deltaStepRatio; // 每两个点采一次样计算 MSE
-        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+        for(Map.Entry<String,List<Point>> entry : References){
             Pair<Double, Double> now_pair = bpi_for_each_ptx
                     .xShiftMSE(
                             new LineChart(Curve.remove_Y_NaN(entry.getValue())),
@@ -350,7 +375,7 @@ public class BpiScanSensing {
         double coarseStep = (maxPtx - minPtx) / (numPtx-1) * 2;
         double fineSearchRange = coarseStep / 2;
         double xStep = (maxPtx - minPtx) / (numPtx-1) * sampleRatio;  // 每两个点采一次样计算 MSE
-        for(Map.Entry<String,List<Point>> entry : References.entrySet()){
+        for(Map.Entry<String,List<Point>> entry : References){
             Pair<Double, Double> now_pair = bpi_for_each_ptx
                     .matchTwoCurves(
                             new LineChart(Curve.remove_Y_NaN(entry.getValue())),
@@ -386,7 +411,7 @@ public class BpiScanSensing {
         double pmaxY = points.stream().mapToDouble(Point::y).max().orElse(Double.NEGATIVE_INFINITY);
         double pminY = points.stream().mapToDouble(Point::y).min().orElse(Double.POSITIVE_INFINITY);
         Map<Double, List<Double>> points_interval = Curve.points_to_y_interval_xs(points, start, interval, false);
-        for(Map.Entry<String, List<Point>> entry : References.entrySet()){
+        for(Map.Entry<String, List<Point>> entry : References){
             List<Point> reference = Curve.remove_Y_NaN(entry.getValue());
             double maxY = Math.min(
                     reference.stream().mapToDouble(Point::y).max().orElse(Double.NEGATIVE_INFINITY),

@@ -9,12 +9,14 @@ import org.example.util.math.Point;
 
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
 public class BpiReference {
     public static ImpinjReader READER = ReaderOperations.READER;
     public static String Target_EPC = null;
+    public static boolean feature_lineSet = false;
     public static String Tag_Feature = "";
     public static Path DATA_DIR = Path.of("data");
     public static Path reference_DATA_DIR = DATA_DIR.resolve("BPI_Reference");
@@ -76,6 +78,9 @@ public class BpiReference {
                     : "unknown_distance";
             distance_DIR = feature_DATA_DIR.resolve(distance);
 
+            feature_lineSet = config.hasPath("feature_lineSet")
+                    && config.getBoolean("feature_lineSet");
+
             Tag_Feature = config.hasPath("tag_feature")
                     ? config.getString("tag_feature")
                     : null;
@@ -87,7 +92,14 @@ public class BpiReference {
                 // 示例: "14-30-45"
                 now_data_path = now_DATA_DIR.resolve(timeStr1 + ".json");
             } else {
-                now_data_path = distance_DIR.resolve(Tag_Feature + ".json");
+                if(!feature_lineSet) {
+                    now_data_path = distance_DIR.resolve(Tag_Feature + ".json");
+                } else {
+                    LocalDateTime time = LocalDateTime.now();
+                    DateTimeFormatter formatter1 = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss");
+                    String timeStr1 = time.format(formatter1);
+                    now_data_path = distance_DIR.resolve(Tag_Feature).resolve(timeStr1 + ".json");
+                }
             }
         } catch (ConfigException.IO ec){
             System.out.println("无法找到 config.conf 文件");
