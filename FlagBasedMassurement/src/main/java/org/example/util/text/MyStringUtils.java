@@ -1,5 +1,10 @@
 package org.example.util.text;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 public final class MyStringUtils { // final类防止继承
     private MyStringUtils() { // 私有构造器禁止实例化
         throw new AssertionError("工具类不可实例化");
@@ -34,5 +39,15 @@ public final class MyStringUtils { // final类防止继承
 
         // 不以后缀结尾，返回原字符串
         return str;
+    }
+
+    public static List<Double> getNum_from_String(String str){
+        Pattern p = Pattern.compile("-?\\d+(?:\\.\\d+)?"); // 整数、小数
+        List<Double> nums = new ArrayList<>();
+        Matcher m = p.matcher(str);
+        while (m.find()) {
+            nums.add(Double.parseDouble(m.group()));
+        }
+        return nums;
     }
 }

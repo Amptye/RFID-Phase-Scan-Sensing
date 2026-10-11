@@ -43,7 +43,7 @@ public class LineChart extends Curve {
     }
 
     /**
-     * 线性插值：根据 x 值插值得到 y 值，如果 x 超出范围则报错。
+     * 线性插值：根据 x 值插值得到 y 值，两端之外取端点的 y 值。
      * 折线图不包含 y=NaN 点
      * @param x 目标 x 坐标
      * @return 插值得到的 y 值

@@ -147,7 +147,7 @@ public abstract class Curve {
     }
 
     /**
-     * 根据 x 值插值得到 y 值。
+     * 根据 x 值插值得到 y 值，两端之外取端点的 y 值
      * @param x 目标 x 坐标
      * @return 插值得到的 y 值
      */
@@ -273,6 +273,11 @@ public abstract class Curve {
      * @return 折线图的 最大 x
      */
     public double xMax() { return xArray[xArray.length - 1]; }
+
+    public static double calculateWidth(List<Point> points){
+        if(points.isEmpty()) return 0;
+        return points.getLast().x() - points.getFirst().x();
+    }
 
     /**
      * 去掉所有 y=NaN 点，保留其他
@@ -492,15 +497,17 @@ public abstract class Curve {
      * @param other 另一条曲线
      * @param deltaStep 平移的步长（一般设置得很小）
      * @param xInterval 用来计算均方误差的 x 的采样间隔是 deltaStep 的多少倍（整数）
-     * @param minOverlapRatio 最小重叠占比（重叠占比 = 重叠区间 / 较短曲线的宽度）
+     * @param minOverlapRatio 最小重叠占比（重叠占比 = 重叠区间 / this曲线的宽度）
+     * @param base_this_or_short 计算重叠率时，分母为this曲线（true）还是较短曲线（false）
      * @return Pair{最小均方误差, 此时的重叠区间 x 轴宽度}
      */
-    public Pair<Double, Double> xShiftMSE(Curve other, double deltaStep, int xInterval, double minOverlapRatio) {
+    public Pair<Double, Double> xShiftMSE(Curve other, double deltaStep, int xInterval, double minOverlapRatio, boolean base_this_or_short) {
         List<Double> y1 = this.getYbyXInterval(deltaStep);
         List<Double> y2 = other.getYbyXInterval(deltaStep);
-        int minLength = Math.min(y1.size(), y2.size());
+        int minLength = base_this_or_short ? y1.size() : Math.min(y1.size(), y2.size());
         if(minOverlapRatio > 1) minOverlapRatio = 1;
         int minOverlapNum = (int)(minOverlapRatio * (minLength - 1)) + 1;
+        if(base_this_or_short && y2.size() < minOverlapNum) return Pair.of(Double.MAX_VALUE, 0.0);
         Pair<Double, Integer> mmse_and_overlapDeltaStepNum = MathUtils.calculateMinMSE(y1, y2, xInterval, minOverlapNum);
         return Pair.of(mmse_and_overlapDeltaStepNum.getLeft(), deltaStep * mmse_and_overlapDeltaStepNum.getRight());
     }
@@ -512,12 +519,13 @@ public abstract class Curve {
      * @param deltaStep 平移的步长（一般设置得很小）
      * @param xInterval 用来计算均方误差的 x 的采样间隔是 deltaStep 的多少倍（整数）
      * @param minOverlapRatio 最小重叠占比（重叠占比 = 重叠区间 / 较短曲线的宽度）
+     * @param base_this_or_short 计算重叠率时，分母为this曲线（true）还是较短曲线（false）
      * @return 参考集中每条线的 Pair{最小均方误差, 此时的重叠区间 x 轴宽度}
      */
-    public Map<String, Pair<Double, Double>> xShiftMSEMap(Map<String, Curve> others, double deltaStep, int xInterval, double minOverlapRatio){
+    public Map<String, Pair<Double, Double>> xShiftMSEMap(Map<String, Curve> others, double deltaStep, int xInterval, double minOverlapRatio, boolean base_this_or_short){
         Map<String, Pair<Double, Double>> result = new HashMap<>(others.size());
         for(Map.Entry<String, Curve> entry : others.entrySet()){
-            result.put(entry.getKey(), xShiftMSE(entry.getValue(), deltaStep, xInterval, minOverlapRatio));
+            result.put(entry.getKey(), xShiftMSE(entry.getValue(), deltaStep, xInterval, minOverlapRatio, base_this_or_short));
         }
         return result;
     }
@@ -533,41 +541,103 @@ public abstract class Curve {
         return Math.max(0, overlapMax - overlapMin);
     }
     /**
-     * 计算重叠率（重叠部分宽度 / 较短曲线的值域宽度）
+     * 计算重叠率（重叠部分宽度 / this曲线或较短曲线的值域宽度）
      * @param shift this 沿 x 轴平移的距离
+     * @param base_this_or_short 计算重叠率时，分母为this曲线（true）还是较短曲线（false）
      */
-    public double calculateOverlapRatio(Curve other, double shift) {
+    public double calculateOverlapRatio(Curve other, double shift, boolean base_this_or_short) {
         double overlapWidth = this.calculateOverlapWidth(other, shift);
-        double minWidth = Math.min(this.getWidth(), other.getWidth());
+        double minWidth = base_this_or_short
+                ? this.getWidth()
+                : Math.min(this.getWidth(), other.getWidth());
 
         return overlapWidth / minWidth;
     }
 
     /**
-     * 平滑曲线数据（使用移动平均，即每个点的新 y 值设置为所处区间内所有点的 y 值的平均值）
+     * 平滑曲线数据（使用移动平均，即每个点的新 y 值设置为所处区间内的 y 值的平均值），平滑过程中取点建列表，不使用原列表的点
      * @param points 待平滑的点列表
-     * @param windowSize 计算平均值的区间长度，点处于两端时截断区间
+     * @param windowWidth 计算平均值的区间长度，处于两端时截断区间
+     * @param precision 计算平均值的精度，计算平均值时将平滑区间分割成几份，理论上应该用 (y值积分 / 区间宽度) 作为平均值
+     * @param smoothness 平滑度，平滑过程中取点建列表的 x 值间隔，如果为非正数，则用原列表内点的 x 值建列表
      * @return 平滑后的点列表
      */
-    public static List<Point> smoothCurve(List<Point> points, int windowSize) {
-        if (windowSize <= 1) return new ArrayList<>(points);
+    public static List<Point> smoothCurve(List<Point> points,
+                                          double windowWidth, int precision,
+                                          double smoothness) {
+        if (windowWidth <= 0) return new ArrayList<>(points);
 
+        double halfWindow = windowWidth / 2;
+        double step = windowWidth / precision;
+
+        Curve curve = new LineChart(points);
         List<Point> result = new ArrayList<>(points.size());
+
+        double nowX = 0;
+        double sumY = 0;
+        if(smoothness <= 0) {
+            for (Point point : points) {
+                nowX = point.x();
+                sumY = 0;
+                for (double j = nowX - halfWindow; j <= nowX + halfWindow; j += step) {
+                    sumY += curve.getY(j);
+                }
+                result.add(new Point(nowX, sumY / (precision + 1)));
+            }
+        } else {
+            nowX = points.getFirst().x();
+            while (nowX <= points.getLast().x()){
+                sumY = 0;
+                for (double j = nowX - halfWindow; j <= nowX + halfWindow; j += step) {
+                    sumY += curve.getY(j);
+                }
+                result.add(new Point(nowX, sumY / (precision + 1)));
+                nowX += smoothness;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 平滑曲线数据（使用移动平均，即每个点的新 y 值设置为所处区间内所有点的 y 值的平均值）
+     * @param points 待平滑的点列表
+     * @param windowSize 计算平均值的区间内点的个数，曲线两端外侧取端点的 y 值
+     * @return 平滑后的点列表
+     */
+    public static List<Point> smoothPointList(List<Point> points, int windowSize) {
+        if (windowSize <= 1) return new ArrayList<>(points);
 
         int halfWindow = windowSize / 2;
 
-        for (int i = 0; i < points.size(); i++) {
-            int start = Math.max(0, i - halfWindow);
-            int end = Math.min(points.size() - 1, i + halfWindow);
-            Point point = points.get(i);
+        List<Point> result = new ArrayList<>(points.size());
 
-            double sum = 0;
-            int count = 0;
-            for (int j = start; j <= end; j++) {
-                sum += points.get(j).y();
-                count++;
-            }
+        List<Point> leftTemp = new ArrayList<>(halfWindow);
+        List<Point> rightTemp = new ArrayList<>(halfWindow);
+        for(int i=0; i<halfWindow; ++i){
+            leftTemp.add(points.getFirst().copy());
+            rightTemp.add(points.getLast().copy());
+        }
+        List<Point> temp = new ArrayList<>(leftTemp);
+        temp.addAll(points);
+        temp.addAll(rightTemp);
+
+        int count = 2*halfWindow + 1;
+        double sum = (halfWindow+1)*points.getFirst().y();
+        for(int i=halfWindow+1; i<count; ++i){
+            sum += temp.get(i).y();
+        }
+        result.add(new Point(points.getFirst().x(), sum / count));
+
+        int left = 0;
+        int right = count;
+
+        for (int i = 1; i < points.size(); ++i) {
+            Point point = points.get(i);
+            sum -= temp.get(left).y();
+            sum += temp.get(right).y();
             result.add(new Point(point.x(), sum / count));
+            left++;
+            right++;
         }
         return result;
     }
@@ -577,9 +647,10 @@ public abstract class Curve {
      * @param shift this 沿 x 轴平移的距离
      * @param other 另一条曲线
      * @param xStep 计算均方误差的 x 的采样间隔
-     * @param minOverlapRatio 两曲线的最小重叠率，如果平移后重叠率过小，则返回 1e9
+     * @param minOverlapRatio 两曲线的最小重叠率（重叠率 = 重叠区间 / this曲线的宽度），如果平移后重叠率过小，则返回 1e9
+     * @param base_this_or_short 计算重叠率时，分母为this曲线（true）还是较短曲线（false）
      */
-    public double calculateMSE(double shift, Curve other, double xStep, double minOverlapRatio) {
+    public double calculateMSE(double shift, Curve other, double xStep, double minOverlapRatio, boolean base_this_or_short) {
 
         // 计算重叠区间
         double overlapMin = Math.max(this.xMin() + shift, other.xMin());
@@ -587,7 +658,7 @@ public abstract class Curve {
 
 //        double overlapWidth = overlapMax - overlapMin;
 //        double minOverlapWidth = minOverlapRatio * Math.min(this.getWidth(), other.getWidth());
-        double overlapRatio = this.calculateOverlapRatio(other, shift);
+        double overlapRatio = this.calculateOverlapRatio(other, shift, base_this_or_short);
 
         // 重叠不足时返回大值
         if (overlapRatio < minOverlapRatio) {
@@ -622,14 +693,16 @@ public abstract class Curve {
      * @param coarseStep 粗搜索步长
      * @param fineSearchRange 精细搜索范围，[x-fineSearchRange, x+fineSearchRange]
      * @param xStep 计算均方误差的 x 的采样间隔
-     * @param minOverlapRatio 两曲线的最小重叠率，如果平移后重叠率过小，则返回 正无穷
+     * @param minOverlapRatio 两曲线的最小重叠率（重叠率 = 重叠区间 / this曲线的宽度），如果平移后重叠率过小，则返回 1e9
+     * @param base_this_or_short 计算重叠率时，分母为this曲线（true）还是较短曲线（false）
      * @return Pair{最小均方误差, 此时的 x 轴重叠率}
      */
     public Pair<Double, Double> matchTwoCurves(Curve other,
                                                 double coarseStep,
                                                 double fineSearchRange,
                                                 double xStep,
-                                                double minOverlapRatio) {
+                                                double minOverlapRatio,
+                                                boolean base_this_or_short) {
         // 确定平移搜索范围
         double aMin = this.xMin();
         double aMax = this.xMax();
@@ -645,7 +718,7 @@ public abstract class Curve {
 
         for (double shift = searchMin; shift <= searchMax;
              shift += coarseStep) {
-            double error = calculateMSE(shift, other, xStep, minOverlapRatio);
+            double error = calculateMSE(shift, other, xStep, minOverlapRatio, base_this_or_short);
             if (error < bestError) {
                 bestError = error;
                 bestShift = shift;
@@ -664,7 +737,7 @@ public abstract class Curve {
             UnivariatePointValuePair optimum = optimizer.optimize(
                     new MaxEval(100),
                     new UnivariateObjectiveFunction(shift ->
-                            calculateMSE(shift, other, xStep, minOverlapRatio)),
+                            calculateMSE(shift, other, xStep, minOverlapRatio, base_this_or_short)),
                     new SearchInterval(fineSearchMin, fineSearchMax),
                     GoalType.MINIMIZE
             );
@@ -677,7 +750,7 @@ public abstract class Curve {
         }
 
         // 计算重叠率
-        double overlapRatio = this.calculateOverlapRatio(other, bestShift);
+        double overlapRatio = this.calculateOverlapRatio(other, bestShift, base_this_or_short);
 
         return Pair.of(bestError, overlapRatio);
     }

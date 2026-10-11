@@ -84,7 +84,7 @@ def bar_accuracy(file_path, output_dir="figures", output_file_name="accuracy_bar
 
 def plot_multiple_json_files(folder_path, output_dir="figures", output_file_name="combined_plot.png"):
     """
-    将一个文件夹下的所有JSON文件绘制到一张图上
+    递归地将一个文件夹下的所有JSON文件绘制到一张图上
     
     参数:
     folder_path: 包含JSON文件的文件夹路径
@@ -93,11 +93,11 @@ def plot_multiple_json_files(folder_path, output_dir="figures", output_file_name
     """
     
     # 查找所有JSON文件
-    # json_files = []
-    # for file in os.listdir(folder_path):
-    #     if file.lower().endswith('.json'):
-    #         json_files.append(os.path.join(folder_path, file))
-    json_files = list(Path(folder_path).rglob("*.json"))
+    json_files = []
+    for file in os.listdir(folder_path):
+        if file.lower().endswith('.json'):
+            json_files.append(Path(os.path.join(folder_path, file)))
+    # json_files = list(Path(folder_path).rglob("*.json"))
     
     if not json_files:
         print(f"警告：在 {folder_path} 中没有找到JSON文件")
@@ -162,7 +162,7 @@ def plot_multiple_json_files(folder_path, output_dir="figures", output_file_name
         # 设置图表属性
         plt.xlabel('x', fontsize=12)
         plt.ylabel('y', fontsize=12)
-        plt.title(f'Multiple JSON Files from {os.path.basename(folder_path)}', fontsize=14)
+        plt.title(f'Multiple JSON Files from {Path(folder_path).name}', fontsize=14)
         plt.grid(True, alpha=0.3)
         plt.legend(loc='best', fontsize=10)
         plt.tight_layout()
@@ -174,7 +174,6 @@ def plot_multiple_json_files(folder_path, output_dir="figures", output_file_name
         # plt.show()
     else:
         print("错误：没有可绘制的有效数据")
-
 
 def plot_data(file_path, output_dir="figures"):
     try:
@@ -269,8 +268,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='绘制JSON数据点图像')
     parser.add_argument('-c', '--combine', action='store_true')
-    parser.add_argument('file_path', nargs='?', default=".\\BPI_Reference\\tag-features\\0ml.json", help='JSON文件路径')
-    parser.add_argument('output_dir', nargs='?', default=".\\figures\\tag-features", help='图像输出目录')
+    parser.add_argument('file_path', nargs='?', default=".\\data\\Phase_Reference\\tag-features\\0ml.json", help='JSON文件路径')
+    parser.add_argument('output_dir', nargs='?', default="", help='图像输出目录')
     parser.add_argument('-a', '--accuracy', action='store_true')
     
     args = parser.parse_args()

@@ -3,11 +3,7 @@ package org.example.reader;
 import com.impinj.octane.OctaneSdkException;
 import org.example.data.tagdata.MyTagData;
 import org.example.data.tagdata.TagDataCache;
-import org.example.reader.tasks.BpiReference;
-import org.example.reader.tasks.BpiScanSensing;
-import org.example.reader.tasks.PowerScan;
-
-import java.util.Scanner;
+import org.example.reader.tasks.PhaseReference;
 
 public class ReaderMain {
 
@@ -26,9 +22,9 @@ public class ReaderMain {
             // 配置阅读器
             ReaderOperations.configReader();
 
-            // 先扫频
-            BpiReference.run();
-//            BpiScanSensing.run();
+            // 运行
+            PhaseReference.run();
+//            PhaseScanSensing.run();
 
             // 停止阅读器
             ReaderOperations.stopReader();
