@@ -83,8 +83,8 @@ def make_figure(series_list, epc, index, save_dir):
                         color=c, alpha=0.85, zorder=3)
         # 图例改为按序列编号
         from matplotlib.lines import Line2D
-        handles = [Line2D([0], [0], color=cmap((i - 1) % 10), lw=2, label=f'{40+i*30} cm')
-                   for i in range(1, len(series_list) + 1)]
+        handles = [Line2D([0], [0], color=cmap(i % 10), lw=2, label=f'{40+i*30} cm')
+                   for i in range(0, len(series_list))]
         ax.legend(handles=handles, title='Distance', fontsize=11, title_fontsize=12, loc='best')
         ax.set_title(rf'$\phi$ vs Transmit Power', fontsize=14, pad=12)
         _decorate(ax)
@@ -112,7 +112,7 @@ def _decorate(ax):
 
 # ---------- 数据 ----------
 target_epc = "300833B2DDD9014000000000" # Impinj: Monza 4D
-# target_epc = "E280689400004026641539C5" # NXP Semiconductor: UCODE 8
+target_epc = "E280689400004026641539C5" # NXP Semiconductor: UCODE 8
 target_epc = "E28011704000021D48A0F8FE" # Impinj: Monza R6-P
 
 # 此处粘贴你的完整字符串
