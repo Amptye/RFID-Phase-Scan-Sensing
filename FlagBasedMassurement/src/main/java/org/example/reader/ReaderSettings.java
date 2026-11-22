@@ -45,8 +45,11 @@ public class ReaderSettings {
                 Config ac_conf = antennas_conf.get(i);
                 ac.setEnabled(ac_conf.getBoolean("Enabled"));
                 ac.setIsMaxTxPower(ac_conf.getBoolean("IsMaxTxPower"));
-                ac.setTxPowerinDbm(ac_conf.getInt("TxPowerinDbm")); //(20); (31.5);
+                if(!ac.getIsMaxTxPower())
+                    ac.setTxPowerinDbm(ac_conf.getDouble("TxPowerinDbm")); //(20); (31.5);
                 ac.setIsMaxRxSensitivity(ac_conf.getBoolean("IsMaxRxSensitivity"));
+                if(!ac.getIsMaxRxSensitivity())
+                    ac.setRxSensitivityinDbm(ac_conf.getDouble("RxSensitivityinDbm"));
             }
 
             ReportConfig r = settings.getReport();
