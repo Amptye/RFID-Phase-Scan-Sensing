@@ -215,6 +215,8 @@ public class ITP_Phase_Test {
                 System.out.println("错误: 在最大功率 " + maxPtx + "dBm 下未检测到标签！");
                 System.out.println("请检查: 1. 标签距离 2. 天线连接 3. 标签是否正常工作");
                 read_at_maxPtx = false;
+                // 停止阅读器
+                ReaderOperations.stopReader();
                 return Freq_ITP_Phase;
             }
         }
